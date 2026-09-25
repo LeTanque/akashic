@@ -49,8 +49,6 @@ struct TodoEditorView: View {
                         .onChange(of: draft.description) { _, _ in commit() }
                 }
 
-                previewSection
-
                 metadataSection
             }
             .padding(20)
@@ -69,30 +67,6 @@ struct TodoEditorView: View {
                 draft.updatedAt = todo.updatedAt
             }
         }
-    }
-
-    private var previewSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Preview")
-                .font(.caption.monospaced().weight(.semibold))
-                .foregroundStyle(CyberpunkTheme.neonCyan)
-            MarkdownText(
-                markdown: draft.title.isEmpty ? "Untitled" : draft.title,
-                font: .system(.title3, design: .monospaced).weight(.semibold),
-                foreground: CyberpunkTheme.neonCyan,
-                completed: draft.completed
-            )
-            if !draft.description.isEmpty {
-                MarkdownText(
-                    markdown: draft.description,
-                    font: .system(.body, design: .monospaced),
-                    foreground: CyberpunkTheme.completedShaded,
-                    completed: draft.completed
-                )
-            }
-        }
-        .padding(12)
-        .cyberPanel()
     }
 
     private var metadataSection: some View {
