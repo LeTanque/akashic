@@ -27,6 +27,8 @@ enum CyberpunkTheme {
     static let windowNeonContentInset: CGFloat = 16
     /// Main window header wildstyle wordmark height.
     static let headerWordmarkHeight: CGFloat = 38
+    /// Optical vertical nudge (wordmark reads low vs square header buttons).
+    static let headerWordmarkVerticalOffset: CGFloat = -3
 
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
@@ -147,6 +149,7 @@ struct CyberHeaderStrip<Trailing: View>: View {
         VStack(spacing: 0) {
             ZStack {
                 AkashicHeaderWordmarkView()
+                    .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
                 HStack(spacing: 6) {
                     Spacer(minLength: 0)
                     trailing()
