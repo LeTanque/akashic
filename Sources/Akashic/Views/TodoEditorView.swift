@@ -77,11 +77,18 @@ struct TodoEditorView: View {
                     .foregroundStyle(CyberpunkTheme.completedShaded)
             }
 
-            Picker("Priority", selection: $draft.priority) {
-                ForEach(TodoPriority.allCases, id: \.self) { p in
-                    Text(p.label).tag(p)
+            LabeledContent("Priority") {
+                Picker("", selection: $draft.priority) {
+                    ForEach(TodoPriority.allCases, id: \.self) { p in
+                        Text(p.label)
+                            .foregroundStyle(CyberpunkTheme.priorityColor(p))
+                            .tag(p)
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
             }
+            .foregroundStyle(CyberpunkTheme.priorityColor(draft.priority))
             .onChange(of: draft.priority) { _, _ in commit() }
 
             Toggle("Complete by", isOn: $hasCompleteBy)

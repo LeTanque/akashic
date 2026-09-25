@@ -3,8 +3,10 @@ import SwiftUI
 enum CyberpunkTheme {
     /// Electric blue — borders, text, buttons, title, glow (`#00d9ff`).
     static let neonCyan = Color(red: 0, green: 217 / 255, blue: 1)
-    /// Completed text / button hover fill (`#18484e`).
+    /// Completed text / button hover fill / low priority (`#18484e`).
     static let completedShaded = Color(red: 24 / 255, green: 72 / 255, blue: 78 / 255)
+    /// High priority accent — neon orange on black (`#ff7a1a`).
+    static let neonOrange = Color(red: 1, green: 122 / 255, blue: 26 / 255)
     /// Row dividers (`#333333`).
     static let rowDivider = Color(red: 51 / 255, green: 51 / 255, blue: 51 / 255)
     /// Window / panel fill (`#000000`).
@@ -20,9 +22,9 @@ enum CyberpunkTheme {
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
         case .high:
-            neonCyan.opacity(1)
+            neonOrange
         case .medium:
-            neonCyan.opacity(0.75)
+            neonCyan
         case .low:
             completedShaded
         }
