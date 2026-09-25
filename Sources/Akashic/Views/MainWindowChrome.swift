@@ -86,7 +86,6 @@ enum MainWindowSidebarToggleStripper {
 
     static func apply(to window: NSWindow) {
         window.toolbar = nil
-        window.titlebarAccessoryViewControllers.removeAll()
 
         if let themeFrame = window.contentView?.superview {
             stripViews(in: themeFrame, matchAccessibility: true)
@@ -119,16 +118,10 @@ enum MainWindowSidebarToggleStripper {
         guard matchAccessibility else { return false }
 
         if let button = view as? NSButton {
-            if matchesSidebarText(collectAccessibilityStrings(from: button)) {
-                return true
-            }
-            if let item = button.toolbarItem,
-               item.itemIdentifier.rawValue.localizedCaseInsensitiveContains("sidebar") {
-                return true
-            }
+            return matchesSidebarText(collectAccessibilityStrings(from: button))
         }
 
-        return view is NSButton && matchesSidebarText(collectAccessibilityStrings(from: view))
+        return false
     }
 
     private static func collectAccessibilityStrings(from view: NSView) -> [String] {
