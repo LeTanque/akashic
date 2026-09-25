@@ -27,7 +27,7 @@ struct MainWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CyberHeaderStrip(title: "Akashic") {
+            CyberHeaderStrip {
                 headerActions
             }
             HSplitView {

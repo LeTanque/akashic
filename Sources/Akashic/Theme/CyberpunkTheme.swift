@@ -105,21 +105,24 @@ struct NeonWindowFrameModifier: ViewModifier {
 }
 
 struct CyberHeaderStrip<Trailing: View>: View {
-    var title: String
+    private static let wordmarkHeight: CGFloat = 28
+
     @ViewBuilder var trailing: () -> Trailing
 
-    init(title: String, @ViewBuilder trailing: @escaping () -> Trailing) {
-        self.title = title
+    init(@ViewBuilder trailing: @escaping () -> Trailing) {
         self.trailing = trailing
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Text(title)
-                    .font(.system(size: 15, weight: .bold, design: .monospaced))
-                    .foregroundStyle(CyberpunkTheme.neonCyan)
+                Image("akashic-logo-wildstyle", bundle: .module)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(height: Self.wordmarkHeight)
                     .frame(maxWidth: .infinity)
+                    .accessibilityLabel("Akashic")
                 trailing()
             }
             .padding(.horizontal, 12)
@@ -131,13 +134,6 @@ struct CyberHeaderStrip<Trailing: View>: View {
                 .shadow(color: CyberpunkTheme.neonCyan.opacity(0.5), radius: 4)
         }
         .background(CyberpunkTheme.background)
-    }
-}
-
-extension CyberHeaderStrip where Trailing == EmptyView {
-    init(title: String) {
-        self.title = title
-        self.trailing = { EmptyView() }
     }
 }
 
