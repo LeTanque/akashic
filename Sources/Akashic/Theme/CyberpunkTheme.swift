@@ -24,6 +24,8 @@ enum CyberpunkTheme {
     static let windowNeonGlowClearance: CGFloat = 14
     /// Padding inside the neon stroke before app content.
     static let windowNeonContentInset: CGFloat = 16
+    /// Main window header wildstyle wordmark height.
+    static let headerWordmarkHeight: CGFloat = 28
 
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
@@ -105,8 +107,6 @@ struct NeonWindowFrameModifier: ViewModifier {
 }
 
 struct CyberHeaderStrip<Trailing: View>: View {
-    private static let wordmarkHeight: CGFloat = 28
-
     @ViewBuilder var trailing: () -> Trailing
 
     init(@ViewBuilder trailing: @escaping () -> Trailing) {
@@ -120,7 +120,7 @@ struct CyberHeaderStrip<Trailing: View>: View {
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
-                    .frame(height: Self.wordmarkHeight)
+                    .frame(height: CyberpunkTheme.headerWordmarkHeight)
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel("Akashic")
                 trailing()
