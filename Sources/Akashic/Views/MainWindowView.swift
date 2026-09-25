@@ -59,6 +59,11 @@ struct MainWindowView: View {
             .ignoresSafeArea()
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if store.selectedTodoID == nil {
+                store.selectedTodoID = store.todos.first?.id
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             if let message = store.lastImportMessage {
                 Text(message)
