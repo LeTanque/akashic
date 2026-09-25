@@ -13,17 +13,11 @@ struct TodoEditorView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top) {
-                    CompletionCheckbox(completed: draft.completed) {
-                        store.toggleCompletion(for: draft.id)
-                        if let updated = store.todos.first(where: { $0.id == draft.id }) {
-                            draft = updated
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Title (markdown)")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(CyberpunkTheme.completedShaded)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Title (markdown)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(CyberpunkTheme.completedShaded)
+                    HStack(alignment: .top, spacing: 8) {
                         TextEditor(text: $draft.title)
                             .font(.system(.body, design: .monospaced))
                             .foregroundStyle(CyberpunkTheme.neonCyan)
@@ -32,6 +26,17 @@ struct TodoEditorView: View {
                             .padding(8)
                             .cyberPanel()
                             .onChange(of: draft.title) { _, _ in commit() }
+
+                        CompletionCheckbox(
+                            completed: draft.completed,
+                            style: .editorBlock
+                        ) {
+                            store.toggleCompletion(for: draft.id)
+                            if let updated = store.todos.first(where: { $0.id == draft.id }) {
+                                draft = updated
+                            }
+                        }
+                        .frame(minHeight: 60)
                     }
                 }
 
@@ -126,7 +131,8 @@ struct TodoEditorView: View {
                 Button("Delete todo", role: .destructive) {
                     store.delete(draft)
                 }
-                .buttonStyle(CyberBorderedButtonStyle())
+                .buttonStyle(CyberDestructiveBorderedButtonStyle())
+                .help("Delete this todo permanently")
             }
         }
         .padding(12)
