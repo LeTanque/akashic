@@ -20,6 +20,10 @@ enum CyberpunkTheme {
     static let panel = background
     /// Bottom corners of the frameless main window shell (~macOS default).
     static let windowBottomCornerRadius: CGFloat = 11
+    /// Space between window edge and neon frame (room for outer glow / shadows).
+    static let windowNeonGlowClearance: CGFloat = 14
+    /// Padding inside the neon stroke before app content.
+    static let windowNeonContentInset: CGFloat = 16
 
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
@@ -74,11 +78,12 @@ struct NeonWindowShellShape: InsettableShape {
 
 /// Approximates cyberpunk2044 CSS outer + inset neon glow (not pixel-identical to box-shadow).
 struct NeonWindowFrameModifier: ViewModifier {
-    var padding: CGFloat = 12
+    var contentInset: CGFloat = CyberpunkTheme.windowNeonContentInset
+    var glowClearance: CGFloat = CyberpunkTheme.windowNeonGlowClearance
 
     func body(content: Content) -> some View {
         content
-            .padding(padding)
+            .padding(contentInset)
             .background(CyberpunkTheme.background)
             .clipShape(NeonWindowShellShape())
             .overlay {
@@ -92,6 +97,7 @@ struct NeonWindowFrameModifier: ViewModifier {
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
                     .allowsHitTesting(false)
             }
+            .padding(glowClearance)
             .compositingGroup()
             .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
             .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
@@ -181,7 +187,10 @@ extension View {
         modifier(CyberPanelModifier(cornerRadius: cornerRadius))
     }
 
-    func neonWindowFrame(padding: CGFloat = 12) -> some View {
-        modifier(NeonWindowFrameModifier(padding: padding))
+    func neonWindowFrame(
+        contentInset: CGFloat = CyberpunkTheme.windowNeonContentInset,
+        glowClearance: CGFloat = CyberpunkTheme.windowNeonGlowClearance
+    ) -> some View {
+        modifier(NeonWindowFrameModifier(contentInset: contentInset, glowClearance: glowClearance))
     }
 }

@@ -30,6 +30,7 @@ struct MainWindowChromeConfigurator: NSViewRepresentable {
         window.isMovableByWindowBackground = false
         window.backgroundColor = NSColor.black
         window.isOpaque = true
+        window.contentView?.clipsToBounds = false
 
         for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(kind)?.isHidden = true

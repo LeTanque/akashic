@@ -72,7 +72,7 @@ struct MainWindowView: View {
         .frame(minWidth: 820, minHeight: 520)
         .background(CyberpunkTheme.background)
         .background(MainWindowChromeConfigurator())
-        .neonWindowFrame(padding: 10)
+        .neonWindowFrame()
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
         .onAppear {
