@@ -121,7 +121,7 @@ struct MainWindowView: View {
                 Image(systemName: "plus")
                     .imageScale(.medium)
             }
-            .help("Add todo")
+            .help("New todo")
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
@@ -130,7 +130,7 @@ struct MainWindowView: View {
                 Image(systemName: "square.and.arrow.down")
                     .imageScale(.medium)
             }
-            .help("Import seed")
+            .help("Import bundled seed (replace existing todos)")
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
@@ -139,7 +139,7 @@ struct MainWindowView: View {
                 Image(systemName: "doc.badge.arrow.up")
                     .imageScale(.medium)
             }
-            .help("Import JSON…")
+            .help("Import todos from JSON file…")
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
@@ -147,7 +147,7 @@ struct MainWindowView: View {
             } label: {
                 Text("×")
             }
-            .help("Close window")
+            .help("Close main window")
             .buttonStyle(CyberHeaderIconButtonStyle())
         }
     }

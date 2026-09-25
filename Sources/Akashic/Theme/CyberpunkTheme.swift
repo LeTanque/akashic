@@ -169,21 +169,55 @@ struct CyberHeaderStrip<Trailing: View>: View {
 }
 
 struct CyberBorderedButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
     func makeBody(configuration: Configuration) -> some View {
+        CyberBorderedButtonBody(configuration: configuration, accent: CyberpunkTheme.neonCyan)
+    }
+}
+
+/// Danger-tinted bordered button (e.g. delete in the editor).
+struct CyberDestructiveBorderedButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        CyberBorderedButtonBody(configuration: configuration, accent: CyberpunkTheme.neonOrange)
+    }
+}
+
+private struct CyberBorderedButtonBody: View {
+    let configuration: ButtonStyle.Configuration
+    let accent: Color
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
         configuration.label
             .font(.system(.body, design: .monospaced))
-            .foregroundStyle(CyberpunkTheme.neonCyan)
+            .foregroundStyle(accent.opacity(isEnabled ? 1 : 0.45))
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(configuration.isPressed || !isEnabled
-                ? CyberpunkTheme.completedShaded.opacity(isEnabled ? 0.35 : 0.15)
-                : CyberpunkTheme.background)
+            .background(backgroundFill)
             .overlay(
                 Rectangle()
-                    .stroke(CyberpunkTheme.neonCyan.opacity(isEnabled ? 1 : 0.4), lineWidth: 1)
+                    .stroke(borderColor, lineWidth: isHovered ? 1.5 : 1)
             )
+            .shadow(color: isHovered && isEnabled ? accent.opacity(0.35) : .clear, radius: 4)
+            .onHover { isHovered = $0 }
+    }
+
+    private var backgroundFill: Color {
+        guard isEnabled else {
+            return CyberpunkTheme.completedShaded.opacity(0.15)
+        }
+        if configuration.isPressed {
+            return accent.opacity(0.28)
+        }
+        if isHovered {
+            return accent.opacity(0.18)
+        }
+        return CyberpunkTheme.background
+    }
+
+    private var borderColor: Color {
+        accent.opacity(isEnabled ? (isHovered ? 1 : 0.9) : 0.4)
     }
 }
 
@@ -191,21 +225,47 @@ struct CyberBorderedButtonStyle: ButtonStyle {
 struct CyberHeaderIconButtonStyle: ButtonStyle {
     static let size: CGFloat = 28
 
-    @Environment(\.isEnabled) private var isEnabled
-
     func makeBody(configuration: Configuration) -> some View {
+        CyberHeaderIconButtonBody(configuration: configuration)
+    }
+}
+
+private struct CyberHeaderIconButtonBody: View {
+    let configuration: ButtonStyle.Configuration
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+
+    var body: some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold, design: .monospaced))
-            .foregroundStyle(CyberpunkTheme.neonCyan)
-            .frame(width: Self.size, height: Self.size)
-            .background(configuration.isPressed || !isEnabled
-                ? CyberpunkTheme.completedShaded.opacity(isEnabled ? 0.35 : 0.15)
-                : CyberpunkTheme.background)
+            .foregroundStyle(CyberpunkTheme.neonCyan.opacity(isEnabled ? 1 : 0.45))
+            .frame(width: CyberHeaderIconButtonStyle.size, height: CyberHeaderIconButtonStyle.size)
+            .background(backgroundFill)
             .overlay(
                 Rectangle()
-                    .stroke(CyberpunkTheme.neonCyan.opacity(isEnabled ? 1 : 0.4), lineWidth: 1)
+                    .stroke(borderColor, lineWidth: isHovered && isEnabled ? 1.5 : 1)
             )
+            .shadow(color: isHovered && isEnabled ? CyberpunkTheme.neonCyan.opacity(0.4) : .clear, radius: 5)
             .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+    }
+
+    private var backgroundFill: Color {
+        guard isEnabled else {
+            return CyberpunkTheme.completedShaded.opacity(0.15)
+        }
+        if configuration.isPressed {
+            return CyberpunkTheme.completedShaded.opacity(0.35)
+        }
+        if isHovered {
+            return CyberpunkTheme.completedShaded.opacity(0.28)
+        }
+        return CyberpunkTheme.background
+    }
+
+    private var borderColor: Color {
+        CyberpunkTheme.neonCyan.opacity(isEnabled ? (isHovered ? 1 : 0.95) : 0.4)
     }
 }
 
