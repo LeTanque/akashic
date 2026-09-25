@@ -1,34 +1,66 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum TodoListFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case active = "Active"
+    case completed = "Completed"
+
+    var id: String { rawValue }
+}
+
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
+    @State private var listFilter: TodoListFilter = .all
+
+    private var filteredTodos: [TodoItem] {
+        switch listFilter {
+        case .all:
+            store.todos
+        case .active:
+            store.todos.filter { !$0.completed }
+        case .completed:
+            store.todos.filter(\.completed)
+        }
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $store.selectedTodoID) {
-                ForEach(store.todos) { todo in
-                    TodoRowView(
-                        todo: todo,
-                        compact: false,
-                        onToggleComplete: { store.toggleCompletion(for: todo.id) },
-                        onSelect: { store.selectedTodoID = todo.id }
-                    )
-                    .tag(todo.id)
-                    .listRowBackground(CyberpunkTheme.panel.opacity(0.35))
+        VStack(spacing: 0) {
+            CyberHeaderStrip(title: "Akashic")
+            NavigationSplitView {
+                VStack(spacing: 0) {
+                    filterStrip
+                    List(selection: $store.selectedTodoID) {
+                        ForEach(filteredTodos) { todo in
+                            TodoRowView(
+                                todo: todo,
+                                compact: false,
+                                onToggleComplete: { store.toggleCompletion(for: todo.id) },
+                                onSelect: { store.selectedTodoID = todo.id }
+                            )
+                            .tag(todo.id)
+                            .listRowBackground(CyberpunkTheme.background)
+                            .listRowSeparatorTint(CyberpunkTheme.rowDivider)
+                        }
+                    }
+                    .scrollContentBackground(.hidden)
+                    .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
                 }
-            }
-            .scrollContentBackground(.hidden)
-            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
-        } detail: {
-            if let todo = store.selectedTodo {
-                TodoEditorView(todo: todo)
-            } else {
-                ContentUnavailableView(
-                    "Select a todo",
-                    systemImage: "checklist",
-                    description: Text("Choose an item or add one from the toolbar.")
-                )
+            } detail: {
+                if let todo = store.selectedTodo {
+                    TodoEditorView(todo: todo)
+                } else {
+                    VStack(spacing: 12) {
+                        Text("Select a todo")
+                            .font(.system(.title3, design: .monospaced).weight(.bold))
+                            .foregroundStyle(CyberpunkTheme.neonCyan)
+                        Text("Choose an item or add one from the toolbar.")
+                            .font(.callout.monospaced())
+                            .foregroundStyle(CyberpunkTheme.completedShaded)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(CyberpunkTheme.background)
+                }
             }
         }
         .toolbar {
@@ -51,14 +83,10 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: 820, minHeight: 520)
-        .background {
-            ZStack {
-                CyberpunkTheme.background
-                GlassBackground(material: .underWindowBackground, blendingMode: .behindWindow)
-            }
-            .ignoresSafeArea()
-        }
+        .background(CyberpunkTheme.background)
+        .neonWindowFrame(padding: 10)
         .preferredColorScheme(.dark)
+        .tint(CyberpunkTheme.neonCyan)
         .onAppear {
             if store.selectedTodoID == nil {
                 store.selectedTodoID = store.todos.first?.id
@@ -71,8 +99,37 @@ struct MainWindowView: View {
                     .foregroundStyle(CyberpunkTheme.neonCyan)
                     .frame(maxWidth: .infinity)
                     .padding(8)
-                    .background(CyberpunkTheme.panel.opacity(0.9))
+                    .background(CyberpunkTheme.background)
+                    .overlay(alignment: .top) {
+                        Rectangle()
+                            .fill(CyberpunkTheme.neonCyan)
+                            .frame(height: 1)
+                    }
             }
+        }
+    }
+
+    private var filterStrip: some View {
+        HStack {
+            Text(">")
+                .font(.system(.caption, design: .monospaced).weight(.bold))
+                .foregroundStyle(CyberpunkTheme.neonCyan)
+            Picker("Filter", selection: $listFilter) {
+                ForEach(TodoListFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(CyberpunkTheme.bodyBackground)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(CyberpunkTheme.rowDivider)
+                .frame(height: 1)
         }
     }
 

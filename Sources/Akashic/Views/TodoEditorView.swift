@@ -22,28 +22,30 @@ struct TodoEditorView: View {
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Title (markdown)")
-                            .font(.caption)
-                            .foregroundStyle(CyberpunkTheme.textSecondary)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(CyberpunkTheme.completedShaded)
                         TextEditor(text: $draft.title)
-                            .font(.body)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(CyberpunkTheme.neonCyan)
                             .frame(minHeight: 60)
                             .scrollContentBackground(.hidden)
                             .padding(8)
-                            .glassPanel()
+                            .cyberPanel()
                             .onChange(of: draft.title) { _, _ in commit() }
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Description (markdown)")
-                        .font(.caption)
-                        .foregroundStyle(CyberpunkTheme.textSecondary)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(CyberpunkTheme.completedShaded)
                     TextEditor(text: $draft.description)
-                        .font(.callout)
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(CyberpunkTheme.neonCyan)
                         .frame(minHeight: 100)
                         .scrollContentBackground(.hidden)
                         .padding(8)
-                        .glassPanel()
+                        .cyberPanel()
                         .onChange(of: draft.description) { _, _ in commit() }
                 }
 
@@ -53,6 +55,7 @@ struct TodoEditorView: View {
             }
             .padding(20)
         }
+        .background(CyberpunkTheme.background)
         .onChange(of: store.selectedTodoID) { _, _ in
             if let todo = store.selectedTodo {
                 draft = todo
@@ -71,22 +74,33 @@ struct TodoEditorView: View {
     private var previewSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Preview")
-                .font(.caption.weight(.semibold))
+                .font(.caption.monospaced().weight(.semibold))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
-            MarkdownText(markdown: draft.title.isEmpty ? "Untitled" : draft.title, font: .title3.weight(.semibold), completed: draft.completed)
+            MarkdownText(
+                markdown: draft.title.isEmpty ? "Untitled" : draft.title,
+                font: .system(.title3, design: .monospaced).weight(.semibold),
+                foreground: CyberpunkTheme.neonCyan,
+                completed: draft.completed
+            )
             if !draft.description.isEmpty {
-                MarkdownText(markdown: draft.description, font: .body, foreground: CyberpunkTheme.textSecondary, completed: draft.completed)
+                MarkdownText(
+                    markdown: draft.description,
+                    font: .system(.body, design: .monospaced),
+                    foreground: CyberpunkTheme.completedShaded,
+                    completed: draft.completed
+                )
             }
         }
         .padding(12)
-        .glassPanel()
+        .cyberPanel()
     }
 
     private var metadataSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             LabeledContent("Created") {
                 Text(draft.createdOn.formatted(date: .complete, time: .shortened))
-                    .foregroundStyle(CyberpunkTheme.textSecondary)
+                    .font(.callout.monospaced())
+                    .foregroundStyle(CyberpunkTheme.completedShaded)
             }
 
             Picker("Priority", selection: $draft.priority) {
@@ -121,7 +135,8 @@ struct TodoEditorView: View {
             if let completedAt = draft.completedAt {
                 LabeledContent("Completed at") {
                     Text(completedAt.formatted(date: .complete, time: .shortened))
-                        .foregroundStyle(CyberpunkTheme.neonGreen)
+                        .font(.callout.monospaced())
+                        .foregroundStyle(CyberpunkTheme.completedShaded)
                 }
             }
 
@@ -130,10 +145,11 @@ struct TodoEditorView: View {
                 Button("Delete todo", role: .destructive) {
                     store.delete(draft)
                 }
+                .buttonStyle(CyberBorderedButtonStyle())
             }
         }
         .padding(12)
-        .glassPanel()
+        .cyberPanel()
     }
 
     private func commit() {

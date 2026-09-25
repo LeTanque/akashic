@@ -7,15 +7,19 @@ struct CompletionCheckbox: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(completed ? CyberpunkTheme.neonGreen : CyberpunkTheme.neonCyan, lineWidth: 2)
-                    .frame(width: 26, height: 26)
-                    .shadow(color: (completed ? CyberpunkTheme.neonGreen : CyberpunkTheme.neonCyan).opacity(0.45), radius: 4)
+                Rectangle()
+                    .fill(completed ? CyberpunkTheme.neonCyan : CyberpunkTheme.background)
+                    .frame(width: 22, height: 22)
+                    .overlay(
+                        Rectangle()
+                            .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
+                    )
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(completed ? 0.35 : 0.45), radius: 4)
 
                 if completed {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(CyberpunkTheme.neonGreen)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.black)
                 }
             }
         }
