@@ -51,7 +51,6 @@ struct TodoRowView: View {
                     }
                 }
             }
-        }
         .padding(.vertical, compact ? 6 : 8)
         .padding(.horizontal, compact ? 0 : 4)
     }
