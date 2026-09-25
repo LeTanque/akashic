@@ -9,6 +9,7 @@ final class TodoStore: ObservableObject {
     @Published var lastImportMessage: String?
 
     private let db: DatabaseQueue
+    private let apiServer = TodoAPIServer()
 
     init() {
         db = (try? TodoDatabase.open()) ?? {
@@ -16,6 +17,11 @@ final class TodoStore: ObservableObject {
         }()
         refresh()
         runFirstLaunchSeedIfNeeded()
+        apiServer.start(store: self)
+    }
+
+    deinit {
+        // Task cancellation is fire-and-forget; server tears down with process.
     }
 
     var selectedTodo: TodoItem? {
@@ -38,6 +44,18 @@ final class TodoStore: ObservableObject {
         persist(item)
     }
 
+    @discardableResult
+    func createTodo(
+        title: String,
+        description: String = "",
+        priority: TodoPriority = .medium
+    ) -> TodoItem {
+        var item = TodoItem.new(title: title, description: description, priority: priority)
+        item.updatedAt = Date()
+        persist(item)
+        return item
+    }
+
     func update(_ item: TodoItem) {
         var copy = item
         copy.updatedAt = Date()
@@ -54,6 +72,13 @@ final class TodoStore: ObservableObject {
         refresh()
     }
 
+    @discardableResult
+    func delete(id: UUID) -> Bool {
+        guard let item = todos.first(where: { $0.id == id }) else { return false }
+        delete(item)
+        return true
+    }
+
     func toggleCompletion(for id: UUID) {
         guard var item = todos.first(where: { $0.id == id }) else { return }
         item.completed.toggle()
@@ -64,6 +89,40 @@ final class TodoStore: ObservableObject {
             item.completedAt = nil
         }
         persist(item)
+    }
+
+    func todos(status: String) -> [TodoItem] {
+        switch status.lowercased() {
+        case "active":
+            return todos.filter { !$0.completed }
+        case "completed":
+            return todos.filter(\.completed)
+        default:
+            return todos
+        }
+    }
+
+    @discardableResult
+    func applyPatch(
+        id: UUID,
+        title: String?,
+        description: String?,
+        completed: Bool?,
+        priority: TodoPriority?,
+        completeBy: Date?
+    ) -> TodoItem? {
+        guard var item = todos.first(where: { $0.id == id }) else { return nil }
+        if let title { item.title = title }
+        if let description { item.description = description }
+        if let priority { item.priority = priority }
+        if let completeBy { item.completeBy = completeBy }
+        if let completed, item.completed != completed {
+            item.completed = completed
+            item.completedAt = completed ? Date() : nil
+        }
+        item.updatedAt = Date()
+        persist(item)
+        return item
     }
 
     func importSeedFromBundle(replaceExisting: Bool) {

@@ -4,19 +4,25 @@ import AppKit
 @main
 struct AkashicApp: App {
     @StateObject private var store = TodoStore()
+    @StateObject private var textZoom = TextZoomStore()
     @NSApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
 
     var body: some Scene {
         MenuBarExtra("Akashic", systemImage: "sparkles") {
             MenuBarPopoverView()
                 .environmentObject(store)
+                .environmentObject(textZoom)
+                .akashicTextZoom(textZoom)
                 .background(LaunchOpenMainWindow())
         }
         .menuBarExtraStyle(.window)
+        .commands { zoomCommands }
 
         Window("Akashic", id: "main") {
             MainWindowView()
                 .environmentObject(store)
+                .environmentObject(textZoom)
+                .akashicTextZoom(textZoom)
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -29,6 +35,21 @@ struct AkashicApp: App {
                 Button("New Todo") { store.addTodo() }
                     .keyboardShortcut("n", modifiers: .command)
             }
+            zoomCommands
+        }
+    }
+
+    @CommandsBuilder
+    private var zoomCommands: some Commands {
+        CommandMenu("View") {
+            Button("Zoom In") { textZoom.zoomIn() }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(!textZoom.canZoomIn)
+            Button("Zoom Out") { textZoom.zoomOut() }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(!textZoom.canZoomOut)
+            Button("Actual Size") { textZoom.reset() }
+                .keyboardShortcut("0", modifiers: .command)
         }
     }
 }

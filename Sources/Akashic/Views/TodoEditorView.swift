@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodoEditorView: View {
     @EnvironmentObject private var store: TodoStore
+    @Environment(\.textZoom) private var textZoom
     @State private var draft: TodoItem
     @State private var hasCompleteBy: Bool
 
@@ -15,13 +16,13 @@ struct TodoEditorView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Title (markdown)")
-                        .font(.caption.monospaced())
+                        .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                     HStack(alignment: .top, spacing: 8) {
                         TextEditor(text: $draft.title)
-                            .font(.system(.body, design: .monospaced))
+                            .font(AkashicFont.mono(AkashicFont.body, zoom: textZoom))
                             .foregroundStyle(CyberpunkTheme.neonCyan)
-                            .frame(minHeight: 60)
+                            .frame(minHeight: 60 * textZoom)
                             .scrollContentBackground(.hidden)
                             .padding(8)
                             .cyberPanel()
@@ -36,18 +37,18 @@ struct TodoEditorView: View {
                                 draft = updated
                             }
                         }
-                        .frame(minHeight: 60)
+                        .frame(minHeight: 60 * textZoom)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Description (markdown)")
-                        .font(.caption.monospaced())
+                        .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                     TextEditor(text: $draft.description)
-                        .font(.system(.callout, design: .monospaced))
+                        .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.neonCyan)
-                        .frame(minHeight: 100)
+                        .frame(minHeight: 100 * textZoom)
                         .scrollContentBackground(.hidden)
                         .padding(8)
                         .cyberPanel()
@@ -78,7 +79,7 @@ struct TodoEditorView: View {
         VStack(alignment: .leading, spacing: 12) {
             LabeledContent("Created") {
                 Text(draft.createdOn.formatted(date: .complete, time: .shortened))
-                    .font(.callout.monospaced())
+                    .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
                     .foregroundStyle(CyberpunkTheme.completedShaded)
             }
 
@@ -121,7 +122,7 @@ struct TodoEditorView: View {
             if let completedAt = draft.completedAt {
                 LabeledContent("Completed at") {
                     Text(completedAt.formatted(date: .complete, time: .shortened))
-                        .font(.callout.monospaced())
+                        .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                 }
             }

@@ -1,101 +1,17 @@
 {
-  "source": "cyberpunk2044-todo GET /api/todos",
+  "source": "akashic demo seed",
   "todos": [
-    {
-      "id": 25,
-      "title": "Clean up .zsh profile (ANSI pollutes non-interactive writes; explore less flashy approach)",
-      "completed": false,
-      "priority": "medium",
-      "created_at": "2026-09-25T07:11:50.937Z",
-      "updated_at": "2026-09-25T07:11:50.937Z"
-    },
-    {
-      "id": 24,
-      "title": "Pion prep (CyberScry / MTG deck) \u2014 target Saturday Sep 26",
-      "completed": false,
-      "priority": "high",
-      "created_at": "2026-09-24T07:15:39.973Z",
-      "updated_at": "2026-09-25T07:12:59.004Z"
-    },
-    {
-      "id": 22,
-      "title": "Mortgage $1600/mo",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-08-11T15:23:21.145Z",
-      "updated_at": "2026-09-24T07:12:07.068Z"
-    },
-    {
-      "id": 21,
-      "title": "Wells Fargo Auto loan ~$12k",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-08-11T15:22:47.359Z",
-      "updated_at": "2026-09-24T07:12:07.824Z"
-    },
-    {
-      "id": 20,
-      "title": "Wells Fargo LOC ~$10k",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-08-11T15:22:36.284Z",
-      "updated_at": "2026-09-24T07:12:08.409Z"
-    },
-    {
-      "id": 19,
-      "title": "Forza intelligence UDP parser",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-08-03T01:36:24.947Z",
-      "updated_at": "2026-08-03T01:36:26.365Z"
-    },
-    {
-      "id": 18,
-      "title": "Forza intelligence electronification",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-07-31T06:59:18.911Z",
-      "updated_at": "2026-08-11T15:22:12.410Z"
-    },
-    {
-      "id": 17,
-      "title": "Forza intelligence frontend",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-07-31T06:59:03.055Z",
-      "updated_at": "2026-08-11T15:22:11.891Z"
-    },
-    {
-      "id": 16,
-      "title": "Forza intelligence backend",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-07-31T06:58:53.056Z",
-      "updated_at": "2026-08-11T15:22:11.282Z"
-    },
-    {
-      "id": 15,
-      "title": "LinkedIn - Featured Section",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-07-31T03:12:25.707Z",
-      "updated_at": "2026-07-31T03:12:29.127Z"
-    },
-    {
-      "id": 14,
-      "title": "LinkedIn - better photo",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-07-31T03:12:11.930Z",
-      "updated_at": "2026-08-11T15:22:10.348Z"
-    },
-    {
-      "id": 13,
-      "title": "LinkedIn - improve profile",
-      "completed": true,
-      "priority": "medium",
-      "created_at": "2026-07-31T03:11:59.243Z",
-      "updated_at": "2026-07-31T03:12:36.210Z"
-    }
+    {"id": 1, "title": "Welcome to Akashic", "completed": false, "priority": "high", "created_at": "2026-01-01T12:00:00.000Z", "updated_at": "2026-01-01T12:00:00.000Z"},
+    {"id": 2, "title": "Try the menu-bar sparkles popover", "completed": false, "priority": "medium", "created_at": "2026-01-01T12:00:01.000Z", "updated_at": "2026-01-01T12:00:01.000Z"},
+    {"id": 3, "title": "Open the main editor window", "completed": false, "priority": "medium", "created_at": "2026-01-01T12:00:02.000Z", "updated_at": "2026-01-01T12:00:02.000Z"},
+    {"id": 4, "title": "Set a priority on a todo", "completed": false, "priority": "low", "created_at": "2026-01-01T12:00:03.000Z", "updated_at": "2026-01-01T12:00:03.000Z"},
+    {"id": 5, "title": "Add a complete-by date", "completed": false, "priority": "low", "created_at": "2026-01-01T12:00:04.000Z", "updated_at": "2026-01-01T12:00:04.000Z"},
+    {"id": 6, "title": "Write a description with Markdown links", "completed": false, "priority": "medium", "created_at": "2026-01-01T12:00:05.000Z", "updated_at": "2026-01-01T12:00:05.000Z"},
+    {"id": 7, "title": "Hit GET /health on the embedded API", "completed": false, "priority": "high", "created_at": "2026-01-01T12:00:06.000Z", "updated_at": "2026-01-01T12:00:06.000Z"},
+    {"id": 8, "title": "List todos with GET /api/todos?status=active", "completed": false, "priority": "medium", "created_at": "2026-01-01T12:00:07.000Z", "updated_at": "2026-01-01T12:00:07.000Z"},
+    {"id": 9, "title": "Create a todo via POST /api/todos", "completed": false, "priority": "medium", "created_at": "2026-01-01T12:00:08.000Z", "updated_at": "2026-01-01T12:00:08.000Z"},
+    {"id": 10, "title": "Example completed item", "completed": true, "priority": "low", "created_at": "2026-01-01T11:00:00.000Z", "updated_at": "2026-01-01T11:30:00.000Z"},
+    {"id": 11, "title": "Another completed demo todo", "completed": true, "priority": "medium", "created_at": "2026-01-01T11:05:00.000Z", "updated_at": "2026-01-01T11:35:00.000Z"},
+    {"id": 12, "title": "Delete demo todos when you are ready", "completed": true, "priority": "low", "created_at": "2026-01-01T11:10:00.000Z", "updated_at": "2026-01-01T11:40:00.000Z"}
   ]
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarPopoverView: View {
     @EnvironmentObject private var store: TodoStore
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.textZoom) private var textZoom
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -50,11 +51,11 @@ struct MenuBarPopoverView: View {
     private var header: some View {
         HStack {
             Text("Akashic")
-                .font(.system(.headline, design: .monospaced).weight(.bold))
+                .font(AkashicFont.mono(AkashicFont.headline, weight: .bold, zoom: textZoom))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
             Spacer()
             Text("\(store.todos.filter { !$0.completed }.count) open")
-                .font(.caption.monospaced())
+                .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                 .foregroundStyle(CyberpunkTheme.completedShaded)
         }
         .padding(12)

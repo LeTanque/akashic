@@ -8,3 +8,12 @@ DerivedData/
 
 # Local DoD screenshots (may contain personal seed data)
 dod-evidence/
+
+# Never commit live or exported personal todos
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+seed-from-*.json
+*-personal-todos.json
+local-todos*.json

@@ -11,6 +11,7 @@ private enum TodoListFilter: String, CaseIterable, Identifiable {
 
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
+    @Environment(\.textZoom) private var textZoom
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
 
@@ -51,7 +52,7 @@ struct MainWindowView: View {
         .safeAreaInset(edge: .bottom) {
             if let message = store.lastImportMessage {
                 Text(message)
-                    .font(.caption.monospaced())
+                    .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                     .foregroundStyle(CyberpunkTheme.neonCyan)
                     .frame(maxWidth: .infinity)
                     .padding(8)
@@ -102,10 +103,10 @@ struct MainWindowView: View {
         } else {
             VStack(spacing: 12) {
                 Text("Select a todo")
-                    .font(.system(.title3, design: .monospaced).weight(.bold))
+                    .font(AkashicFont.mono(AkashicFont.title, weight: .bold, zoom: textZoom))
                     .foregroundStyle(CyberpunkTheme.neonCyan)
                 Text("Choose an item or add one from the header.")
-                    .font(.callout.monospaced())
+                    .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
                     .foregroundStyle(CyberpunkTheme.completedShaded)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -130,7 +131,7 @@ struct MainWindowView: View {
                 Image(systemName: "square.and.arrow.down")
                     .imageScale(.medium)
             }
-            .help("Import bundled seed (replace existing todos)")
+            .help("Import bundled demo seed (replace existing todos)")
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
@@ -155,7 +156,7 @@ struct MainWindowView: View {
     private var filterStrip: some View {
         HStack {
             Text(">")
-                .font(.system(.caption, design: .monospaced).weight(.bold))
+                .font(AkashicFont.mono(AkashicFont.caption, weight: .bold, zoom: textZoom))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
             Picker("Filter", selection: $listFilter) {
                 ForEach(TodoListFilter.allCases) { filter in
@@ -181,7 +182,7 @@ struct MainWindowView: View {
         panel.allowedContentTypes = [.json]
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
-        panel.message = "Import cyberpunk2044 seed JSON"
+        panel.message = "Import seed JSON"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         store.importSeedFromFile(url: url)
     }

@@ -11,10 +11,10 @@ final class SeedImporterTests: XCTestCase {
     func testCompletedTodosGetCompletedAtFromUpdatedAt() throws {
         let data = try XCTUnwrap(SeedImporter.bundledSeedData())
         let items = try SeedImporter.parseSeedData(data)
-        let mortgage = try XCTUnwrap(items.first { $0.title.contains("Mortgage") })
-        XCTAssertTrue(mortgage.completed)
-        XCTAssertNotNil(mortgage.completedAt)
-        let open = try XCTUnwrap(items.first { $0.title.contains("Pion prep") })
+        let completed = try XCTUnwrap(items.first { $0.title.contains("Example completed") })
+        XCTAssertTrue(completed.completed)
+        XCTAssertNotNil(completed.completedAt)
+        let open = try XCTUnwrap(items.first { $0.title.contains("Welcome to Akashic") })
         XCTAssertFalse(open.completed)
         XCTAssertNil(open.completedAt)
     }
