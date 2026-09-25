@@ -154,6 +154,28 @@ struct CyberBorderedButtonStyle: ButtonStyle {
     }
 }
 
+/// Fixed square chrome for header icon buttons (Add, import, close).
+struct CyberHeaderIconButtonStyle: ButtonStyle {
+    static let size: CGFloat = 28
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            .foregroundStyle(CyberpunkTheme.neonCyan)
+            .frame(width: Self.size, height: Self.size)
+            .background(configuration.isPressed || !isEnabled
+                ? CyberpunkTheme.completedShaded.opacity(isEnabled ? 0.35 : 0.15)
+                : CyberpunkTheme.background)
+            .overlay(
+                Rectangle()
+                    .stroke(CyberpunkTheme.neonCyan.opacity(isEnabled ? 1 : 0.4), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+    }
+}
+
 extension View {
     func cyberPanel(cornerRadius: CGFloat = 0) -> some View {
         modifier(CyberPanelModifier(cornerRadius: cornerRadius))

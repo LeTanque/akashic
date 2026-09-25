@@ -103,34 +103,36 @@ struct MainWindowView: View {
                 store.addTodo()
             } label: {
                 Image(systemName: "plus")
+                    .imageScale(.medium)
             }
             .help("Add todo")
-            .buttonStyle(CyberBorderedButtonStyle())
+            .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
                 store.importSeedFromBundle(replaceExisting: true)
             } label: {
                 Image(systemName: "square.and.arrow.down")
+                    .imageScale(.medium)
             }
             .help("Import seed")
-            .buttonStyle(CyberBorderedButtonStyle())
+            .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
                 importFromFile()
             } label: {
                 Image(systemName: "doc.badge.arrow.up")
+                    .imageScale(.medium)
             }
             .help("Import JSON…")
-            .buttonStyle(CyberBorderedButtonStyle())
+            .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
                 dismissWindow(id: "main")
             } label: {
                 Text("×")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
             }
             .help("Close window")
-            .buttonStyle(CyberBorderedButtonStyle())
+            .buttonStyle(CyberHeaderIconButtonStyle())
         }
     }
 
