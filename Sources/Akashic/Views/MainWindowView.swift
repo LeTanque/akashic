@@ -13,7 +13,6 @@ struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
-    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     private var filteredTodos: [TodoItem] {
         switch listFilter {
@@ -31,48 +30,16 @@ struct MainWindowView: View {
             CyberHeaderStrip(title: "Akashic") {
                 headerActions
             }
-            NavigationSplitView(columnVisibility: $columnVisibility) {
-                VStack(spacing: 0) {
-                    filterStrip
-                    List(selection: $store.selectedTodoID) {
-                        ForEach(filteredTodos) { todo in
-                            TodoRowView(
-                                todo: todo,
-                                compact: false,
-                                onToggleComplete: { store.toggleCompletion(for: todo.id) },
-                                onSelect: { store.selectedTodoID = todo.id }
-                            )
-                            .tag(todo.id)
-                            .listRowBackground(CyberpunkTheme.background)
-                            .listRowSeparatorTint(CyberpunkTheme.rowDivider)
-                        }
-                    }
-                    .scrollContentBackground(.hidden)
-                    .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
-                }
-            } detail: {
-                if let todo = store.selectedTodo {
-                    TodoEditorView(todo: todo)
-                } else {
-                    VStack(spacing: 12) {
-                        Text("Select a todo")
-                            .font(.system(.title3, design: .monospaced).weight(.bold))
-                            .foregroundStyle(CyberpunkTheme.neonCyan)
-                        Text("Choose an item or add one from the toolbar.")
-                            .font(.callout.monospaced())
-                            .foregroundStyle(CyberpunkTheme.completedShaded)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(CyberpunkTheme.background)
-                }
+            HSplitView {
+                todoListColumn
+                detailColumn
             }
-            .navigationSplitViewStyle(.balanced)
-            .toolbar(removing: .sidebarToggle)
         }
         .frame(minWidth: 820, minHeight: 520)
         .background(CyberpunkTheme.background)
         .background(MainWindowChromeConfigurator())
         .neonWindowFrame()
+        .toolbar(.hidden, for: .windowToolbar)
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
         .onAppear {
@@ -94,6 +61,46 @@ struct MainWindowView: View {
                             .frame(height: 1)
                     }
             }
+        }
+    }
+
+    private var todoListColumn: some View {
+        VStack(spacing: 0) {
+            filterStrip
+            List(selection: $store.selectedTodoID) {
+                ForEach(filteredTodos) { todo in
+                    TodoRowView(
+                        todo: todo,
+                        compact: false,
+                        onToggleComplete: { store.toggleCompletion(for: todo.id) },
+                        onSelect: { store.selectedTodoID = todo.id }
+                    )
+                    .tag(todo.id)
+                    .listRowBackground(CyberpunkTheme.background)
+                    .listRowSeparatorTint(CyberpunkTheme.rowDivider)
+                }
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+        .background(CyberpunkTheme.background)
+    }
+
+    @ViewBuilder
+    private var detailColumn: some View {
+        if let todo = store.selectedTodo {
+            TodoEditorView(todo: todo)
+        } else {
+            VStack(spacing: 12) {
+                Text("Select a todo")
+                    .font(.system(.title3, design: .monospaced).weight(.bold))
+                    .foregroundStyle(CyberpunkTheme.neonCyan)
+                Text("Choose an item or add one from the header.")
+                    .font(.callout.monospaced())
+                    .foregroundStyle(CyberpunkTheme.completedShaded)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(CyberpunkTheme.background)
         }
     }
 

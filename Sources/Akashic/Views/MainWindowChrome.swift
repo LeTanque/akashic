@@ -20,6 +20,10 @@ struct MainWindowChromeConfigurator: NSViewRepresentable {
 
     private func configureMainWindow(for view: NSView) {
         guard let window = view.window, window.title == "Akashic" else { return }
+
+        // SwiftUI / NavigationSplitView may attach a toolbar with a sidebar toggle — strip it every pass.
+        window.toolbar = nil
+
         let token = ObjectIdentifier(window)
         guard !MainWindowChromeState.configured.contains(token) else { return }
         MainWindowChromeState.configured.insert(token)
