@@ -40,6 +40,7 @@ struct MainWindowView: View {
         .background(MainWindowChromeConfigurator())
         .neonWindowFrame()
         .toolbar(.hidden, for: .windowToolbar)
+        .toolbar(removing: .sidebarToggle)
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
         .onAppear {
@@ -67,20 +68,28 @@ struct MainWindowView: View {
     private var todoListColumn: some View {
         VStack(spacing: 0) {
             filterStrip
-            List(selection: $store.selectedTodoID) {
-                ForEach(filteredTodos) { todo in
-                    TodoRowView(
-                        todo: todo,
-                        compact: false,
-                        onToggleComplete: { store.toggleCompletion(for: todo.id) },
-                        onSelect: { store.selectedTodoID = todo.id }
-                    )
-                    .tag(todo.id)
-                    .listRowBackground(CyberpunkTheme.background)
-                    .listRowSeparatorTint(CyberpunkTheme.rowDivider)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(filteredTodos) { todo in
+                        TodoRowView(
+                            todo: todo,
+                            compact: false,
+                            onToggleComplete: { store.toggleCompletion(for: todo.id) },
+                            onSelect: { store.selectedTodoID = todo.id }
+                        )
+                        .background(
+                            store.selectedTodoID == todo.id
+                                ? CyberpunkTheme.completedShaded.opacity(0.22)
+                                : CyberpunkTheme.background
+                        )
+                        .overlay(alignment: .bottom) {
+                            Rectangle()
+                                .fill(CyberpunkTheme.rowDivider)
+                                .frame(height: 1)
+                        }
+                    }
                 }
             }
-            .scrollContentBackground(.hidden)
         }
         .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
         .background(CyberpunkTheme.background)

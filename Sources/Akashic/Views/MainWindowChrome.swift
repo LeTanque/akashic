@@ -3,27 +3,62 @@ import SwiftUI
 
 /// Configures the main Akashic document window: no title bar, no traffic lights, opaque black fill.
 struct MainWindowChromeConfigurator: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.isHidden = true
-        DispatchQueue.main.async {
-            configureMainWindow(for: view)
-        }
-        return view
+    func makeNSView(context: Context) -> MainWindowChromeStripperView {
+        MainWindowChromeStripperView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            configureMainWindow(for: nsView)
+    func updateNSView(_ nsView: MainWindowChromeStripperView, context: Context) {
+        nsView.stripNow()
+    }
+}
+
+/// Runs on every layout pass so SwiftUI cannot re-inject a sidebar toggle into the titlebar.
+final class MainWindowChromeStripperView: NSView {
+    override var isHidden: Bool {
+        get { true }
+        set { _ = newValue }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        stripNow()
+        installWindowObserversIfNeeded()
+    }
+
+    override func layout() {
+        super.layout()
+        stripNow()
+    }
+
+    func stripNow() {
+        guard let window, window.title == "Akashic" else { return }
+        MainWindowSidebarToggleStripper.apply(to: window)
+        applyOneTimeWindowChrome(to: window)
+    }
+
+    private func installWindowObserversIfNeeded() {
+        guard let window, window.title == "Akashic" else { return }
+        let token = ObjectIdentifier(window)
+        guard !MainWindowChromeState.observedWindows.contains(token) else { return }
+        MainWindowChromeState.observedWindows.insert(token)
+
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stripNow()
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stripNow()
         }
     }
 
-    private func configureMainWindow(for view: NSView) {
-        guard let window = view.window, window.title == "Akashic" else { return }
-
-        // SwiftUI / NavigationSplitView may attach a toolbar with a sidebar toggle — strip it every pass.
-        window.toolbar = nil
-
+    private func applyOneTimeWindowChrome(to window: NSWindow) {
         let token = ObjectIdentifier(window)
         guard !MainWindowChromeState.configured.contains(token) else { return }
         MainWindowChromeState.configured.insert(token)
@@ -42,8 +77,85 @@ struct MainWindowChromeConfigurator: NSViewRepresentable {
     }
 }
 
+enum MainWindowSidebarToggleStripper {
+    private static let togglePhrases = [
+        "hide sidebar",
+        "show sidebar",
+        "toggle sidebar",
+    ]
+
+    static func apply(to window: NSWindow) {
+        window.toolbar = nil
+        window.titlebarAccessoryViewControllers.removeAll()
+
+        if let themeFrame = window.contentView?.superview {
+            stripViews(in: themeFrame, matchAccessibility: true)
+        }
+        stripViews(in: window.contentView, matchAccessibility: false)
+    }
+
+    private static func stripViews(in root: NSView?, matchAccessibility: Bool) {
+        guard let root else { return }
+        for subview in root.subviews {
+            if shouldRemove(subview, matchAccessibility: matchAccessibility) {
+                subview.isHidden = true
+                subview.alphaValue = 0
+                subview.removeFromSuperview()
+                continue
+            }
+            stripViews(in: subview, matchAccessibility: matchAccessibility)
+        }
+    }
+
+    private static func shouldRemove(_ view: NSView, matchAccessibility: Bool) -> Bool {
+        let className = String(describing: type(of: view)).lowercased()
+        if className.contains("sidebartoggle") || className.contains("sidebartoolbar") {
+            return true
+        }
+        if className.contains("sidebar") && (className.contains("toggle") || className.contains("button")) {
+            return true
+        }
+
+        guard matchAccessibility else { return false }
+
+        if let button = view as? NSButton {
+            if matchesSidebarText(collectAccessibilityStrings(from: button)) {
+                return true
+            }
+            if let item = button.toolbarItem,
+               item.itemIdentifier.rawValue.localizedCaseInsensitiveContains("sidebar") {
+                return true
+            }
+        }
+
+        return view is NSButton && matchesSidebarText(collectAccessibilityStrings(from: view))
+    }
+
+    private static func collectAccessibilityStrings(from view: NSView) -> [String] {
+        [
+            view.accessibilityLabel(),
+            view.accessibilityHelp(),
+            view.accessibilityTitle(),
+            view.toolTip,
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    }
+
+    private static func matchesSidebarText(_ strings: [String]) -> Bool {
+        for value in strings {
+            let lower = value.lowercased()
+            for phrase in togglePhrases where lower.contains(phrase) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
 private enum MainWindowChromeState {
     static var configured = Set<ObjectIdentifier>()
+    static var observedWindows = Set<ObjectIdentifier>()
 }
 
 /// Drag the window from the header strip (`performDrag` on mouse down).
