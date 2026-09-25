@@ -18,6 +18,8 @@ enum CyberpunkTheme {
     static let textSecondary = completedShaded
     static let border = neonCyan
     static let panel = background
+    /// Bottom corners of the frameless main window shell (~macOS default).
+    static let windowBottomCornerRadius: CGFloat = 11
 
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
@@ -47,6 +49,29 @@ struct CyberPanelModifier: ViewModifier {
     }
 }
 
+/// Square top corners; bottom corners match the macOS window shell radius.
+struct NeonWindowShellShape: InsettableShape {
+    var bottomCornerRadius: CGFloat = CyberpunkTheme.windowBottomCornerRadius
+    var insetAmount: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let r = max(0, bottomCornerRadius - insetAmount)
+        return UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: r,
+            bottomTrailingRadius: r,
+            topTrailingRadius: 0,
+            style: .continuous
+        ).path(in: rect.insetBy(dx: insetAmount, dy: insetAmount))
+    }
+
+    func inset(by amount: CGFloat) -> NeonWindowShellShape {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+}
+
 /// Approximates cyberpunk2044 CSS outer + inset neon glow (not pixel-identical to box-shadow).
 struct NeonWindowFrameModifier: ViewModifier {
     var padding: CGFloat = 12
@@ -55,18 +80,19 @@ struct NeonWindowFrameModifier: ViewModifier {
         content
             .padding(padding)
             .background(CyberpunkTheme.background)
+            .clipShape(NeonWindowShellShape())
             .overlay {
-                Rectangle()
+                NeonWindowShellShape()
                     .stroke(CyberpunkTheme.neonCyan.opacity(0.35), lineWidth: 5)
-                    .padding(-3)
                     .blur(radius: 4)
                     .allowsHitTesting(false)
             }
             .overlay {
-                Rectangle()
+                NeonWindowShellShape()
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
                     .allowsHitTesting(false)
             }
+            .compositingGroup()
             .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
             .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
     }
