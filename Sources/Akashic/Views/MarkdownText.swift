@@ -16,8 +16,8 @@ struct MarkdownText: View {
             }
         }
         .font(font)
-        .foregroundStyle(completed ? CyberpunkTheme.textSecondary : foreground)
-        .strikethrough(completed, color: CyberpunkTheme.textSecondary)
+        .foregroundStyle(completed ? CyberpunkTheme.completedShaded : foreground)
+        .strikethrough(completed, color: CyberpunkTheme.completedShaded)
         .textSelection(.enabled)
         .environment(\.openURL, OpenURLAction { url in
             NSWorkspace.shared.open(url)

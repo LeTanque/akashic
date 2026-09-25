@@ -7,7 +7,10 @@ struct MenuBarPopoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider().overlay(CyberpunkTheme.border)
+            Rectangle()
+                .fill(CyberpunkTheme.neonCyan)
+                .frame(height: 1)
+                .shadow(color: CyberpunkTheme.neonCyan.opacity(0.45), radius: 3)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(store.todos) { todo in
@@ -21,34 +24,41 @@ struct MenuBarPopoverView: View {
                             }
                         )
                         .padding(.horizontal, 12)
+                        Divider()
+                            .overlay(CyberpunkTheme.rowDivider)
                     }
                 }
                 .padding(.vertical, 8)
             }
             .frame(maxHeight: 360)
+            Rectangle()
+                .fill(CyberpunkTheme.rowDivider)
+                .frame(height: 1)
             footer
         }
         .frame(width: 380)
-        .background {
-            ZStack {
-                CyberpunkTheme.background
-                GlassBackground(material: .popover, blendingMode: .withinWindow)
-                    .opacity(0.85)
-            }
+        .background(CyberpunkTheme.background)
+        .overlay {
+            Rectangle()
+                .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
         }
+        .shadow(color: CyberpunkTheme.neonCyan.opacity(0.55), radius: 7)
+        .preferredColorScheme(.dark)
+        .tint(CyberpunkTheme.neonCyan)
     }
 
     private var header: some View {
         HStack {
             Text("Akashic")
-                .font(.headline.weight(.bold))
+                .font(.system(.headline, design: .monospaced).weight(.bold))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
             Spacer()
             Text("\(store.todos.filter { !$0.completed }.count) open")
                 .font(.caption.monospaced())
-                .foregroundStyle(CyberpunkTheme.textSecondary)
+                .foregroundStyle(CyberpunkTheme.completedShaded)
         }
         .padding(12)
+        .background(CyberpunkTheme.background)
     }
 
     private var footer: some View {
@@ -58,6 +68,7 @@ struct MenuBarPopoverView: View {
             } label: {
                 Label("Add", systemImage: "plus")
             }
+            .buttonStyle(CyberBorderedButtonStyle())
             .keyboardShortcut("n", modifiers: .command)
 
             Spacer()
@@ -68,9 +79,9 @@ struct MenuBarPopoverView: View {
                 }
                 openWindow(id: "main")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(CyberpunkTheme.neonMagenta.opacity(0.85))
+            .buttonStyle(CyberBorderedButtonStyle())
         }
         .padding(12)
+        .background(CyberpunkTheme.background)
     }
 }
