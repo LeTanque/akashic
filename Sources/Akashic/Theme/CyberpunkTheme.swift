@@ -70,22 +70,40 @@ struct NeonWindowFrameModifier: ViewModifier {
     }
 }
 
-struct CyberHeaderStrip: View {
+struct CyberHeaderStrip<Trailing: View>: View {
     var title: String
+    @ViewBuilder var trailing: () -> Trailing
+
+    init(title: String, @ViewBuilder trailing: @escaping () -> Trailing) {
+        self.title = title
+        self.trailing = trailing
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(title)
-                .font(.system(size: 15, weight: .bold, design: .monospaced))
-                .foregroundStyle(CyberpunkTheme.neonCyan)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundStyle(CyberpunkTheme.neonCyan)
+                    .frame(maxWidth: .infinity)
+                trailing()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(WindowDragRegion())
             Rectangle()
                 .fill(CyberpunkTheme.neonCyan)
                 .frame(height: 1)
                 .shadow(color: CyberpunkTheme.neonCyan.opacity(0.5), radius: 4)
         }
         .background(CyberpunkTheme.background)
+    }
+}
+
+extension CyberHeaderStrip where Trailing == EmptyView {
+    init(title: String) {
+        self.title = title
+        self.trailing = { EmptyView() }
     }
 }
 

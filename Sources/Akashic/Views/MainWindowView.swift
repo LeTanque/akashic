@@ -11,6 +11,7 @@ private enum TodoListFilter: String, CaseIterable, Identifiable {
 
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
 
     private var filteredTodos: [TodoItem] {
@@ -26,7 +27,9 @@ struct MainWindowView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CyberHeaderStrip(title: "Akashic")
+            CyberHeaderStrip(title: "Akashic") {
+                headerActions
+            }
             NavigationSplitView {
                 VStack(spacing: 0) {
                     filterStrip
@@ -63,27 +66,9 @@ struct MainWindowView: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    store.addTodo()
-                } label: {
-                    Label("Add", systemImage: "plus")
-                }
-                Button {
-                    store.importSeedFromBundle(replaceExisting: true)
-                } label: {
-                    Label("Import seed", systemImage: "square.and.arrow.down")
-                }
-                Button {
-                    importFromFile()
-                } label: {
-                    Label("Import JSON…", systemImage: "doc.badge.arrow.up")
-                }
-            }
-        }
         .frame(minWidth: 820, minHeight: 520)
         .background(CyberpunkTheme.background)
+        .background(MainWindowChromeConfigurator())
         .neonWindowFrame(padding: 10)
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
@@ -106,6 +91,43 @@ struct MainWindowView: View {
                             .frame(height: 1)
                     }
             }
+        }
+    }
+
+    private var headerActions: some View {
+        HStack(spacing: 6) {
+            Button {
+                store.addTodo()
+            } label: {
+                Image(systemName: "plus")
+            }
+            .help("Add todo")
+            .buttonStyle(CyberBorderedButtonStyle())
+
+            Button {
+                store.importSeedFromBundle(replaceExisting: true)
+            } label: {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .help("Import seed")
+            .buttonStyle(CyberBorderedButtonStyle())
+
+            Button {
+                importFromFile()
+            } label: {
+                Image(systemName: "doc.badge.arrow.up")
+            }
+            .help("Import JSON…")
+            .buttonStyle(CyberBorderedButtonStyle())
+
+            Button {
+                dismissWindow(id: "main")
+            } label: {
+                Text("×")
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+            }
+            .help("Close window")
+            .buttonStyle(CyberBorderedButtonStyle())
         }
     }
 

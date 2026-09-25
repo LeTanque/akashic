@@ -21,6 +21,7 @@ struct AkashicApp: App {
                     NSApp.activate(ignoringOtherApps: true)
                 }
         }
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 920, height: 620)
         .defaultLaunchBehavior(.presented)
         .commands {
