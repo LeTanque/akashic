@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum CyberpunkTheme {
@@ -25,7 +26,7 @@ enum CyberpunkTheme {
     /// Padding inside the neon stroke before app content.
     static let windowNeonContentInset: CGFloat = 16
     /// Main window header wildstyle wordmark height.
-    static let headerWordmarkHeight: CGFloat = 28
+    static let headerWordmarkHeight: CGFloat = 38
 
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
@@ -106,6 +107,36 @@ struct NeonWindowFrameModifier: ViewModifier {
     }
 }
 
+private enum AkashicHeaderWordmark {
+    static func loadNSImage() -> NSImage? {
+        guard let url = Bundle.module.url(forResource: "akashic-logo-wildstyle", withExtension: "png") else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }
+}
+
+private struct AkashicHeaderWordmarkView: View {
+    var body: some View {
+        Group {
+            if let nsImage = AkashicHeaderWordmark.loadNSImage() {
+                Image(nsImage: nsImage)
+                    .renderingMode(.original)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(height: CyberpunkTheme.headerWordmarkHeight)
+            } else {
+                Text("Akashic")
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundStyle(CyberpunkTheme.neonCyan)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel("Akashic")
+    }
+}
+
 struct CyberHeaderStrip<Trailing: View>: View {
     @ViewBuilder var trailing: () -> Trailing
 
@@ -116,13 +147,7 @@ struct CyberHeaderStrip<Trailing: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image("akashic-logo-wildstyle", bundle: .module)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(height: CyberpunkTheme.headerWordmarkHeight)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel("Akashic")
+                AkashicHeaderWordmarkView()
                 trailing()
             }
             .padding(.horizontal, 12)
