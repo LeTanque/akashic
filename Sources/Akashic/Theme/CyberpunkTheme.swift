@@ -132,7 +132,6 @@ private struct AkashicHeaderWordmarkView: View {
                     .foregroundStyle(CyberpunkTheme.neonCyan)
             }
         }
-        .frame(maxWidth: .infinity)
         .accessibilityLabel("Akashic")
     }
 }
@@ -146,10 +145,14 @@ struct CyberHeaderStrip<Trailing: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
+            ZStack {
                 AkashicHeaderWordmarkView()
-                trailing()
+                HStack(spacing: 6) {
+                    Spacer(minLength: 0)
+                    trailing()
+                }
             }
+            .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(WindowDragRegion())
