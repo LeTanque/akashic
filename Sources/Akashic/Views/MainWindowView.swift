@@ -13,6 +13,7 @@ struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
+    @State private var columnVisibility: NavigationSplitViewVisibility = .doubleColumn
 
     private var filteredTodos: [TodoItem] {
         switch listFilter {
@@ -30,7 +31,7 @@ struct MainWindowView: View {
             CyberHeaderStrip(title: "Akashic") {
                 headerActions
             }
-            NavigationSplitView {
+            NavigationSplitView(columnVisibility: $columnVisibility) {
                 VStack(spacing: 0) {
                     filterStrip
                     List(selection: $store.selectedTodoID) {
@@ -65,6 +66,8 @@ struct MainWindowView: View {
                     .background(CyberpunkTheme.background)
                 }
             }
+            .navigationSplitViewStyle(.balanced)
+            .toolbar(removing: .sidebarToggle)
         }
         .frame(minWidth: 820, minHeight: 520)
         .background(CyberpunkTheme.background)
