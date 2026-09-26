@@ -42,7 +42,6 @@ struct TodoListContent: View {
             }
         }
         .listStyle(.plain)
-        .listRowSpacing(0)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 1)
     }
