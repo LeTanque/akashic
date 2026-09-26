@@ -18,24 +18,34 @@ struct HeaderMetricsStrip: View {
         )
 
         ViewThatFits(in: .horizontal) {
-            strip(lines.full)
-            strip(lines.compact)
-            strip(lines.short)
-            strip(lines.minimal)
+            stacked(lines.full)
+            stacked(lines.compact)
+            stacked(lines.short)
+            stacked(MetricsStripText.Rows(top: lines.minimal, bottom: ""))
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(lines.full)
+        .accessibilityLabel(lines.spoken)
         .allowsHitTesting(false)
         .onAppear { live.start() }
         .onDisappear { live.stop() }
     }
 
-    private func strip(_ text: String) -> some View {
+    private func stacked(_ rows: MetricsStripText.Rows) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            row(rows.top)
+            if !rows.bottom.isEmpty {
+                row(rows.bottom)
+            }
+        }
+    }
+
+    private func row(_ text: String) -> some View {
         Text(text)
             .font(.system(size: AkashicFont.caption, weight: .medium, design: .monospaced))
             .foregroundStyle(CyberpunkTheme.neonCyan)
             .lineLimit(1)
             .truncationMode(.tail)
-            .padding(.trailing, 4)
+            .fixedSize(horizontal: true, vertical: true)
     }
 }

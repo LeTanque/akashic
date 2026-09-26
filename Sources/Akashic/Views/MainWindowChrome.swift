@@ -1,4 +1,5 @@
 import AppKit
+import ObjectiveC
 import SwiftUI
 
 /// Configures the main Akashic document window: no title bar, no traffic lights, clear/non-opaque fill so smoked glass can show.
@@ -23,6 +24,11 @@ final class MainWindowChromeStripperView: NSView {
         super.viewDidMoveToWindow()
         stripNow()
         installWindowObserversIfNeeded()
+        // SwiftUI re-injects titlebar/toolbar after the first attach.
+        DispatchQueue.main.async { [weak self] in self?.stripNow() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            self?.stripNow()
+        }
     }
 
     override func layout() {
@@ -35,7 +41,8 @@ final class MainWindowChromeStripperView: NSView {
         MainWindowSidebarToggleStripper.apply(to: window)
         applyTranslucentWindow(to: window)
         MainWindowOpaqueFillClearer.apply(to: window)
-        applyOneTimeWindowChrome(to: window)
+        applyWindowChrome(to: window)
+        MainWindowSystemChromeCollapser.apply(to: window)
     }
 
     private func applyTranslucentWindow(to window: NSWindow) {
@@ -68,11 +75,8 @@ final class MainWindowChromeStripperView: NSView {
         }
     }
 
-    private func applyOneTimeWindowChrome(to window: NSWindow) {
-        let token = ObjectIdentifier(window)
-        guard !MainWindowChromeState.configured.contains(token) else { return }
-        MainWindowChromeState.configured.insert(token)
-
+    /// Re-applied every pass: SwiftUI Window scenes restore titlebar chrome after first layout.
+    private func applyWindowChrome(to window: NSWindow) {
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.titlebarSeparatorStyle = .none
@@ -80,9 +84,19 @@ final class MainWindowChromeStripperView: NSView {
         window.isMovableByWindowBackground = false
         window.hasShadow = true
         window.contentView?.clipsToBounds = false
+        window.toolbar = nil
+        window.setAutorecalculatesContentBorderThickness(false, for: .maxY)
+        window.setContentBorderThickness(0, for: .maxY)
 
         for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
-            window.standardWindowButton(kind)?.isHidden = true
+            if let button = window.standardWindowButton(kind) {
+                button.isHidden = true
+                button.alphaValue = 0
+            }
+        }
+
+        while !window.titlebarAccessoryViewControllers.isEmpty {
+            window.removeTitlebarAccessoryViewController(at: 0)
         }
     }
 }
@@ -188,8 +202,96 @@ enum MainWindowSidebarToggleStripper {
 }
 
 private enum MainWindowChromeState {
-    static var configured = Set<ObjectIdentifier>()
     static var observedWindows = Set<ObjectIdentifier>()
+}
+
+/// Leftover vertical gap from the system titlebar / `contentLayoutRect`, not neon insets.
+enum MainWindowTitlebarMetrics {
+    /// Points reserved above the unobscured content layout inside `contentView`.
+    static func reservedTop(contentBounds: CGRect, contentLayoutInContentView: CGRect) -> CGFloat {
+        max(0, contentBounds.maxY - contentLayoutInContentView.maxY)
+    }
+
+    static func reservedTop(in window: NSWindow) -> CGFloat {
+        guard let contentView = window.contentView else {
+            return max(0, window.frame.height - window.contentLayoutRect.height)
+        }
+        let layout = contentView.convert(window.contentLayoutRect, from: nil)
+        return reservedTop(contentBounds: contentView.bounds, contentLayoutInContentView: layout)
+    }
+}
+
+/// Hide the titlebar container and zero SwiftUI hosting safe-area so content sits
+/// on the neon content inset, not an extra system titlebar band.
+enum MainWindowSystemChromeCollapser {
+    static func apply(to window: NSWindow) {
+        collapseTitlebarViews(in: window.contentView?.superview)
+        collapseTitlebarViews(in: window.contentView)
+        neutralizeHostingSafeArea(in: window.contentView)
+        neutralizeHostingSafeArea(in: window.contentView?.superview)
+        if let contentView = window.contentView {
+            cancelRemainingTopSafeArea(contentView)
+        }
+    }
+
+    private static func collapseTitlebarViews(in root: NSView?) {
+        guard let root else { return }
+        let name = String(describing: type(of: root))
+        if isTitlebarChrome(name) {
+            root.isHidden = true
+            root.alphaValue = 0
+            if root.frame.height > 0.5 {
+                root.setFrameSize(NSSize(width: root.frame.width, height: 0))
+            }
+        }
+        for child in root.subviews {
+            collapseTitlebarViews(in: child)
+        }
+    }
+
+    private static func isTitlebarChrome(_ typeName: String) -> Bool {
+        typeName.contains("NSTitlebarContainerView")
+            || typeName.contains("NSTitlebarView")
+            || typeName.contains("NSTitlebarAccessoryClipView")
+            || typeName.contains("NSToolbarTitlebar")
+    }
+
+    private static func neutralizeHostingSafeArea(in root: NSView?) {
+        guard let root else { return }
+        if hostingViewClearsSafeArea(root) {
+            setSafeAreaRegionsEmpty(root)
+            cancelRemainingTopSafeArea(root)
+        }
+        for child in root.subviews {
+            neutralizeHostingSafeArea(in: child)
+        }
+    }
+
+    private static func hostingViewClearsSafeArea(_ view: NSView) -> Bool {
+        view.responds(to: NSSelectorFromString("setSafeAreaRegions:"))
+    }
+
+    /// `NSHostingView.safeAreaRegions = []` so the titlebar is not a SwiftUI inset.
+    private static func setSafeAreaRegionsEmpty(_ view: NSView) {
+        let selector = NSSelectorFromString("setSafeAreaRegions:")
+        guard view.responds(to: selector),
+              let method = class_getInstanceMethod(object_getClass(view), selector)
+        else { return }
+        typealias Setter = @convention(c) (AnyObject, Selector, UInt) -> Void
+        let setter = unsafeBitCast(method_getImplementation(method), to: Setter.self)
+        setter(view, selector, 0)
+    }
+
+    /// If `contentLayoutRect` still reports a titlebar band, cancel it with
+    /// `additionalSafeAreaInsets` so SwiftUI does not pad the header down.
+    private static func cancelRemainingTopSafeArea(_ view: NSView) {
+        let systemTop = view.safeAreaInsets.top - view.additionalSafeAreaInsets.top
+        let target = systemTop > 0.5 ? -systemTop : 0
+        guard abs(view.additionalSafeAreaInsets.top - target) > 0.5 else { return }
+        var insets = view.additionalSafeAreaInsets
+        insets.top = target
+        view.additionalSafeAreaInsets = insets
+    }
 }
 
 /// Drag the window from the header strip (`performDrag` on mouse down).

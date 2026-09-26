@@ -35,11 +35,30 @@ struct GlassBackground: NSViewRepresentable {
 struct SmokedGlassFill: View {
     var material: NSVisualEffectView.Material = .hudWindow
     var smokeOpacity: Double = 0.38
+    /// Extra darkness in the leftover titlebar / top chrome band only.
+    var topChromeVeilOpacity: Double = 0
+    var topChromeVeilHeight: CGFloat = 0
 
     var body: some View {
         ZStack {
             GlassBackground(material: material, blendingMode: .behindWindow)
             Color.black.opacity(smokeOpacity)
+            if topChromeVeilHeight > 0, topChromeVeilOpacity > 0 {
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.black.opacity(topChromeVeilOpacity), location: 0),
+                            .init(color: Color.black.opacity(topChromeVeilOpacity * 0.55), location: 0.5),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: topChromeVeilHeight)
+                    .allowsHitTesting(false)
+                    Spacer(minLength: 0)
+                }
+            }
         }
     }
 }

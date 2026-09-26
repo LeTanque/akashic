@@ -25,6 +25,10 @@ enum CyberpunkTheme {
     static let windowNeonGlowClearance: CGFloat = 14
     /// Padding inside the neon stroke before app content.
     static let windowNeonContentInset: CGFloat = 16
+    /// Extra smoke over leftover titlebar / top chrome (on top of the 0.38 window veil).
+    static let windowTopChromeVeilOpacity: Double = 0.45
+    /// Typical ~28pt titlebar plus the 16pt content inset, fading into the header.
+    static let windowTopChromeVeilHeight: CGFloat = 52
     /// Main window header wildstyle wordmark height.
     static let headerWordmarkHeight: CGFloat = 38
     /// Optical vertical nudge (wordmark reads low vs square header buttons).
@@ -93,10 +97,15 @@ struct NeonWindowFrameModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .ignoresSafeArea(edges: .top)
+            .ignoresSafeArea(.container, edges: .top)
             .padding(contentInset)
             .background {
-                SmokedGlassFill(material: .hudWindow, smokeOpacity: 0.38)
+                SmokedGlassFill(
+                    material: .hudWindow,
+                    smokeOpacity: 0.38,
+                    topChromeVeilOpacity: CyberpunkTheme.windowTopChromeVeilOpacity,
+                    topChromeVeilHeight: CyberpunkTheme.windowTopChromeVeilHeight
+                )
             }
             .clipShape(NeonWindowShellShape())
             .overlay {
@@ -155,16 +164,19 @@ struct CyberHeaderStrip<Trailing: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
+            HStack(alignment: .center, spacing: 8) {
+                Color.clear
+                    .frame(minWidth: 0, maxWidth: .infinity)
                 AkashicHeaderWordmarkView()
                     .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
-                HStack(spacing: 8) {
-                    Spacer(minLength: 0)
-                    // Top header chrome only: band between centered wordmark and trailing actions.
+                    .layoutPriority(1)
+                HStack(alignment: .center, spacing: 8) {
+                    // Empty band between wordmark and +/import/close: left-aligned, two rows.
                     HeaderMetricsStrip()
                     trailing()
                         .layoutPriority(1)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)

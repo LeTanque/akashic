@@ -41,6 +41,7 @@ struct MainWindowView: View {
         .neonWindowFrame()
         .toolbar(.hidden, for: .windowToolbar)
         .toolbar(removing: .sidebarToggle)
+        .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
         .onAppear {
