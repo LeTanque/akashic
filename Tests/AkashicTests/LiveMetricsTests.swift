@@ -25,18 +25,18 @@ final class LiveMetricsTests: XCTestCase {
 
     func testStripTextMatchesHeaderPattern() {
         let lines = MetricsStripText.make(
-            appRSS: 42 * 1024 * 1024,
+            diskFree: 412 * 1024 * 1024 * 1024,
             sysUsed: 18 * 1024 * 1024 * 1024,
             sysTotal: 36 * 1024 * 1024 * 1024,
             cpuPercent: 23.4,
             cloudAgents: 2,
             bots: nil
         )
-        XCTAssertEqual(lines.full.top, "APP 42M  ·  SYS 18/36G")
+        XCTAssertEqual(lines.full.top, "DISK 412G  ·  SYS 18/36G")
         XCTAssertEqual(lines.full.bottom, "CPU 23%  ·  CA 2")
-        XCTAssertEqual(lines.tight.top, "APP 42M · SYS 18/36G")
+        XCTAssertEqual(lines.tight.top, "DISK 412G · SYS 18/36G")
         XCTAssertEqual(lines.tight.bottom, "CPU 23% · CA 2")
-        XCTAssertEqual(lines.spoken, "APP 42M  ·  SYS 18/36G  ·  CPU 23%  ·  CA 2")
+        XCTAssertEqual(lines.spoken, "DISK 412G  ·  SYS 18/36G  ·  CPU 23%  ·  CA 2")
         // Tightening the gutter is allowed; dropping SYS or CPU is not.
         XCTAssertTrue(lines.tight.top.contains("SYS"))
         XCTAssertTrue(lines.tight.bottom.contains("CPU"))
@@ -44,18 +44,18 @@ final class LiveMetricsTests: XCTestCase {
 
     func testStripTextEmptyStatesAndOptionalBot() {
         let lines = MetricsStripText.make(
-            appRSS: 8 * 1024 * 1024,
+            diskFree: 128 * 1024 * 1024 * 1024,
             sysUsed: 4 * 1024 * 1024 * 1024,
             sysTotal: 8 * 1024 * 1024 * 1024,
             cpuPercent: nil,
             cloudAgents: nil,
             bots: 1
         )
-        XCTAssertEqual(lines.full.top, "APP 8M  ·  SYS 4/8G")
+        XCTAssertEqual(lines.full.top, "DISK 128G  ·  SYS 4/8G")
         XCTAssertEqual(lines.full.bottom, "CPU —  ·  CA —  ·  BOT 1")
-        XCTAssertEqual(lines.tight.top, "APP 8M · SYS 4/8G")
+        XCTAssertEqual(lines.tight.top, "DISK 128G · SYS 4/8G")
         XCTAssertEqual(lines.tight.bottom, "CPU — · CA — · BOT 1")
-        XCTAssertEqual(lines.spoken, "APP 8M  ·  SYS 4/8G  ·  CPU —  ·  CA —  ·  BOT 1")
+        XCTAssertEqual(lines.spoken, "DISK 128G  ·  SYS 4/8G  ·  CPU —  ·  CA —  ·  BOT 1")
     }
 
     func testParseAgentMetricsSamplePayload() throws {

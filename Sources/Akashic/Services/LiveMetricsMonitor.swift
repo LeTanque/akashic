@@ -2,7 +2,7 @@ import Combine
 import Darwin
 import Foundation
 
-/// Process RSS, host memory, and aggregate CPU sampled about once a second.
+/// Free disk on the home volume, host memory, and aggregate CPU sampled about once a second.
 @MainActor
 final class LiveMetricsMonitor: ObservableObject {
     @Published private(set) var snapshot = LiveMetricsSnapshot()
@@ -31,8 +31,8 @@ final class LiveMetricsMonitor: ObservableObject {
 
     func sample() {
         var next = snapshot
-        if let rss = MachHostMetrics.appResidentBytes() {
-            next.appRSS = rss
+        if let free = MachHostMetrics.systemFreeBytes() {
+            next.diskFree = free
         }
         if let sys = MachHostMetrics.systemMemory() {
             next.sysUsed = sys.used
@@ -49,7 +49,8 @@ final class LiveMetricsMonitor: ObservableObject {
 }
 
 struct LiveMetricsSnapshot: Equatable, Sendable {
-    var appRSS: UInt64 = 0
+    /// Free space on `MachHostMetrics.freeSpaceVolumePath` (home/Data volume).
+    var diskFree: UInt64 = 0
     var sysUsed: UInt64 = 0
     var sysTotal: UInt64 = 0
     /// Machine-wide 0–100 once two tick samples exist; `nil` until then.
@@ -106,7 +107,7 @@ enum MetricsStripText {
     }
 
     struct Lines: Equatable {
-        /// APP + SYS / CPU + CA (+ BOT on the second row when present).
+        /// DISK + SYS / CPU + CA (+ BOT on the second row when present).
         var full: Rows
         /// Same four metrics with a tighter separator — never drops SYS or CPU.
         var tight: Rows
@@ -115,14 +116,14 @@ enum MetricsStripText {
     }
 
     static func make(
-        appRSS: UInt64,
+        diskFree: UInt64,
         sysUsed: UInt64,
         sysTotal: UInt64,
         cpuPercent: Double?,
         cloudAgents: Int?,
         bots: Int?
     ) -> Lines {
-        let app = "APP \(CompactBytes.format(appRSS))"
+        let disk = "DISK \(CompactBytes.format(diskFree))"
         let sys = "SYS \(CompactBytes.usedOverTotal(used: sysUsed, total: sysTotal))"
         let cpu: String = {
             if let cpuPercent {
@@ -147,12 +148,12 @@ enum MetricsStripText {
             row2.append(bot)
         }
 
-        let spokenParts = [app, sys, cpu, ca] + (bot.map { [$0] } ?? [])
+        let spokenParts = [disk, sys, cpu, ca] + (bot.map { [$0] } ?? [])
 
         return Lines(
-            full: Rows(top: join([app, sys]), bottom: join(row2)),
+            full: Rows(top: join([disk, sys]), bottom: join(row2)),
             tight: Rows(
-                top: join([app, sys], separator: tightSeparator),
+                top: join([disk, sys], separator: tightSeparator),
                 bottom: join(row2, separator: tightSeparator)
             ),
             spoken: join(spokenParts)
@@ -161,18 +162,14 @@ enum MetricsStripText {
 }
 
 enum MachHostMetrics {
-    static func appResidentBytes() -> UInt64? {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(
-            MemoryLayout<mach_task_basic_info_data_t>.size / MemoryLayout<natural_t>.size
-        )
-        let result = withUnsafeMutablePointer(to: &info) { pointer in
-            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
-            }
-        }
-        guard result == KERN_SUCCESS else { return nil }
-        return UInt64(info.resident_size)
+    /// Volume whose free space the header HUD shows (typically the macOS Data volume).
+    static let freeSpaceVolumePath = FileManager.default.homeDirectoryForCurrentUser.path
+
+    static func systemFreeBytes() -> UInt64? {
+        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: freeSpaceVolumePath),
+              let free = attrs[.systemFreeSize] as? NSNumber
+        else { return nil }
+        return free.uint64Value
     }
 
     static func systemMemory() -> (used: UInt64, total: UInt64)? {

@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Compact, display-only HUD in the main-window top header chrome
 /// (`CyberHeaderStrip`, leading-aligned to the left of the wordmark).
-/// Always shows both rows (APP/SYS and CPU/CA). Not a side panel or
+/// Always shows both rows (DISK/SYS and CPU/CA). Not a side panel or
 /// bottom inset; not shown in the menu-bar popover.
 struct HeaderMetricsStrip: View {
     @StateObject private var live = LiveMetricsMonitor()
@@ -10,7 +10,7 @@ struct HeaderMetricsStrip: View {
 
     var body: some View {
         let lines = MetricsStripText.make(
-            appRSS: live.snapshot.appRSS,
+            diskFree: live.snapshot.diskFree,
             sysUsed: live.snapshot.sysUsed,
             sysTotal: live.snapshot.sysTotal,
             cpuPercent: live.snapshot.cpuPercent,
@@ -19,7 +19,7 @@ struct HeaderMetricsStrip: View {
         )
 
         // Always the full two rows. ViewThatFits used to fall back to
-        // APP+CA (or APP only) when the leading flex column was starved —
+        // DISK+CA (or DISK only) when the leading flex column was starved —
         // that omitted SYS/CPU and is the bug Frank hit after PR #10.
         stacked(lines.full)
             .accessibilityElement(children: .ignore)
