@@ -24,12 +24,14 @@ final class MainWindowChromeTests: XCTestCase {
         )
     }
 
-    func testNeonFrameInsetsAreTightAndEven() {
-        XCTAssertEqual(CyberpunkTheme.windowNeonGlowClearance, 8)
-        XCTAssertEqual(CyberpunkTheme.windowNeonContentInset, 8)
-        XCTAssertEqual(
-            CyberpunkTheme.windowNeonGlowClearance,
-            CyberpunkTheme.windowNeonContentInset
-        )
+    func testNeonFrameInsetsStayAtDesignValues() {
+        XCTAssertEqual(CyberpunkTheme.windowNeonGlowClearance, 14)
+        XCTAssertEqual(CyberpunkTheme.windowNeonContentInset, 16)
+    }
+
+    func testTopChromeVeilIsDarkerThanWindowSmokeAndCoversTitlebarBand() {
+        XCTAssertGreaterThan(CyberpunkTheme.windowTopChromeVeilOpacity, 0.38)
+        XCTAssertLessThan(CyberpunkTheme.windowTopChromeVeilOpacity, 0.8)
+        XCTAssertGreaterThanOrEqual(CyberpunkTheme.windowTopChromeVeilHeight, 28)
     }
 }
