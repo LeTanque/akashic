@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Shared todo stack used by the main window and the menu-bar popover.
-/// Uses `List` + `onMove` so click-hold-drag reorders without List-style gaps after drop.
+/// `List` + `onMove` gives native click-hold-drag without stealing row taps.
 struct TodoListContent: View {
     @EnvironmentObject private var store: TodoStore
 
@@ -26,6 +26,7 @@ struct TodoListContent: View {
                 ))
                 .listRowSeparator(.hidden)
                 .listRowBackground(rowBackground(for: todo))
+                .contentShape(Rectangle())
                 .overlay(alignment: .bottom) {
                     if compact {
                         Divider().overlay(CyberpunkTheme.rowDivider)
@@ -41,6 +42,7 @@ struct TodoListContent: View {
             }
         }
         .listStyle(.plain)
+        .listRowSpacing(0)
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 1)
     }
