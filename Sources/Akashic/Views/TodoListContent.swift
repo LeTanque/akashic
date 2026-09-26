@@ -48,7 +48,7 @@ struct TodoListContent: View {
 
     private func rowBackground(for todo: TodoItem) -> Color {
         store.selectedTodoID == todo.id
-            ? CyberpunkTheme.completedShaded.opacity(0.22)
-            : CyberpunkTheme.background
+            ? CyberpunkTheme.completedShaded.opacity(0.28)
+            : Color.clear
     }
 }

@@ -23,12 +23,15 @@ struct MenuBarPopoverView: View {
             footer
         }
         .frame(width: 380)
-        .background(CyberpunkTheme.background)
+        .background {
+            SmokedGlassFill(material: .hudWindow, smokeOpacity: 0.38)
+        }
+        .background(PopoverWindowTranslucencyConfigurator())
         .overlay {
             Rectangle()
                 .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
+                .shadow(color: CyberpunkTheme.neonCyan.opacity(0.55), radius: 7)
         }
-        .shadow(color: CyberpunkTheme.neonCyan.opacity(0.55), radius: 7)
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
     }
@@ -44,7 +47,7 @@ struct MenuBarPopoverView: View {
                 .foregroundStyle(CyberpunkTheme.completedShaded)
         }
         .padding(12)
-        .background(CyberpunkTheme.background)
+        .background(Color.black.opacity(0.18))
     }
 
     private var footer: some View {
@@ -69,6 +72,6 @@ struct MenuBarPopoverView: View {
             .buttonStyle(CyberBorderedButtonStyle())
         }
         .padding(12)
-        .background(CyberpunkTheme.background)
+        .background(Color.black.opacity(0.18))
     }
 }

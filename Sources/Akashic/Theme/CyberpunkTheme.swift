@@ -49,7 +49,12 @@ struct CyberPanelModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(CyberpunkTheme.background)
+            .background {
+                ZStack {
+                    GlassBackground(material: .hudWindow, blendingMode: .behindWindow)
+                    Color.black.opacity(0.4)
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
@@ -89,7 +94,9 @@ struct NeonWindowFrameModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(contentInset)
-            .background(CyberpunkTheme.background)
+            .background {
+                SmokedGlassFill(material: .hudWindow, smokeOpacity: 0.38)
+            }
             .clipShape(NeonWindowShellShape())
             .overlay {
                 NeonWindowShellShape()
@@ -100,12 +107,11 @@ struct NeonWindowFrameModifier: ViewModifier {
             .overlay {
                 NeonWindowShellShape()
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
                     .allowsHitTesting(false)
             }
             .padding(glowClearance)
-            .compositingGroup()
-            .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
-            .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
     }
 }
 
@@ -164,7 +170,7 @@ struct CyberHeaderStrip<Trailing: View>: View {
                 .frame(height: 1)
                 .shadow(color: CyberpunkTheme.neonCyan.opacity(0.5), radius: 4)
         }
-        .background(CyberpunkTheme.background)
+        .background(Color.black.opacity(0.18))
     }
 }
 

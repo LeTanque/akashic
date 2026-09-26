@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Configures the main Akashic document window: no title bar, no traffic lights, opaque black fill.
+/// Configures the main Akashic document window: no title bar, no traffic lights, clear/non-opaque fill so smoked glass can show.
 struct MainWindowChromeConfigurator: NSViewRepresentable {
     func makeNSView(context: Context) -> MainWindowChromeStripperView {
         MainWindowChromeStripperView()
@@ -33,7 +33,17 @@ final class MainWindowChromeStripperView: NSView {
     func stripNow() {
         guard let window, window.title == "Akashic" else { return }
         MainWindowSidebarToggleStripper.apply(to: window)
+        applyTranslucentWindow(to: window)
+        MainWindowOpaqueFillClearer.apply(to: window)
         applyOneTimeWindowChrome(to: window)
+    }
+
+    private func applyTranslucentWindow(to window: NSWindow) {
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.isOpaque = false
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
     }
 
     private func installWindowObserversIfNeeded() {
@@ -67,12 +77,42 @@ final class MainWindowChromeStripperView: NSView {
         window.titleVisibility = .hidden
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = false
-        window.backgroundColor = NSColor.black
-        window.isOpaque = true
+        window.hasShadow = true
         window.contentView?.clipsToBounds = false
 
         for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(kind)?.isHidden = true
+        }
+    }
+}
+
+enum MainWindowOpaqueFillClearer {
+    static func apply(to window: NSWindow) {
+        clear(in: window.contentView)
+        clear(in: window.contentView?.superview)
+    }
+
+    private static func clear(in root: NSView?) {
+        guard let root else { return }
+        if let split = root as? NSSplitView {
+            split.isOpaque = false
+            split.wantsLayer = true
+            split.layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        if let scroll = root as? NSScrollView {
+            scroll.drawsBackground = false
+            scroll.backgroundColor = .clear
+        }
+        if let clip = root as? NSClipView {
+            clip.drawsBackground = false
+            clip.backgroundColor = .clear
+        }
+        if let table = root as? NSTableView {
+            table.backgroundColor = .clear
+            table.enclosingScrollView?.drawsBackground = false
+        }
+        for subview in root.subviews {
+            clear(in: subview)
         }
     }
 }
@@ -161,7 +201,49 @@ struct WindowDragRegion: NSViewRepresentable {
 }
 
 final class WindowDragNSView: NSView {
+    override var isOpaque: Bool { false }
+
     override func mouseDown(with event: NSEvent) {
         window?.performDrag(with: event)
+    }
+}
+
+/// Makes a MenuBarExtra / popover window clear so `behindWindow` glass can show.
+struct PopoverWindowTranslucencyConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> PopoverWindowTranslucencyView {
+        PopoverWindowTranslucencyView()
+    }
+
+    func updateNSView(_ nsView: PopoverWindowTranslucencyView, context: Context) {
+        nsView.apply()
+    }
+}
+
+final class PopoverWindowTranslucencyView: NSView {
+    override var isOpaque: Bool { false }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        apply()
+    }
+
+    override func layout() {
+        super.layout()
+        apply()
+    }
+
+    func apply() {
+        guard let window else { return }
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        contentViewLayerIsTransparent(window)
+        MainWindowOpaqueFillClearer.apply(to: window)
+    }
+
+    private func contentViewLayerIsTransparent(_ window: NSWindow) {
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.isOpaque = false
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
     }
 }

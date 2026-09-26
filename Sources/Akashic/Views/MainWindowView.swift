@@ -37,7 +37,6 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: 820, minHeight: 520)
-        .background(CyberpunkTheme.background)
         .background(MainWindowChromeConfigurator())
         .neonWindowFrame()
         .toolbar(.hidden, for: .windowToolbar)
@@ -56,7 +55,7 @@ struct MainWindowView: View {
                     .foregroundStyle(CyberpunkTheme.neonCyan)
                     .frame(maxWidth: .infinity)
                     .padding(8)
-                    .background(CyberpunkTheme.background)
+                    .background(Color.black.opacity(0.35))
                     .overlay(alignment: .top) {
                         Rectangle()
                             .fill(CyberpunkTheme.neonCyan)
@@ -74,7 +73,6 @@ struct MainWindowView: View {
             }
         }
         .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
-        .background(CyberpunkTheme.background)
     }
 
     @ViewBuilder
@@ -92,7 +90,6 @@ struct MainWindowView: View {
                     .foregroundStyle(CyberpunkTheme.completedShaded)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(CyberpunkTheme.background)
         }
     }
 
@@ -151,7 +148,7 @@ struct MainWindowView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(CyberpunkTheme.bodyBackground)
+        .background(Color.black.opacity(0.22))
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(CyberpunkTheme.rowDivider)

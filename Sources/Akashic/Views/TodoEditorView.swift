@@ -59,7 +59,7 @@ struct TodoEditorView: View {
             }
             .padding(20)
         }
-        .background(CyberpunkTheme.background)
+        .background(Color.clear)
         .onChange(of: store.selectedTodoID) { _, _ in
             if let todo = store.selectedTodo {
                 draft = todo
