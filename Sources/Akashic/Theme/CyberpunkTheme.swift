@@ -135,6 +135,7 @@ private struct AkashicHeaderWordmarkView: View {
                     .interpolation(.high)
                     .scaledToFit()
                     .frame(height: CyberpunkTheme.headerWordmarkHeight)
+                    .background(Color.clear)
             } else {
                 Text("Akashic")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
