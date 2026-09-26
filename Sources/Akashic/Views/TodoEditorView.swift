@@ -45,14 +45,10 @@ struct TodoEditorView: View {
                     Text("Description (markdown)")
                         .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
-                    TextEditor(text: $draft.description)
-                        .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
-                        .foregroundStyle(CyberpunkTheme.neonCyan)
-                        .frame(minHeight: 100 * textZoom)
-                        .scrollContentBackground(.hidden)
-                        .padding(8)
-                        .cyberPanel()
-                        .onChange(of: draft.description) { _, _ in commitIfChanged() }
+                    MarkdownDescriptionEditor(
+                        text: $draft.description,
+                        onCommit: commitIfChanged
+                    )
                 }
 
                 metadataSection

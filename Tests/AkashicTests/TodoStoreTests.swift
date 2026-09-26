@@ -118,6 +118,21 @@ final class TodoStoreTests: XCTestCase {
         XCTAssertEqual(TodoStore.insertionIndex(for: .low, in: items), 1)
     }
 
+    func testUpdatePersistsMarkdownDescriptionSourceUnchanged() throws {
+        let store = try TodoStore.isolatedForTesting()
+        let item = store.createTodo(title: "Note", description: "")
+        let source = """
+        # Heading
+        See **bold**, *italic*, `code`, and [docs](https://example.com).
+        - list item
+        """
+        var edited = item
+        edited.description = source
+        store.update(edited)
+        XCTAssertEqual(store.todos.first { $0.id == item.id }?.description, source)
+        XCTAssertEqual(store.todos.first { $0.id == item.id }?.title, "Note")
+    }
+
     func testHasSameEditableContentIgnoresTimestampsAndSortOrder() {
         var a = TodoItem.new(title: "Same", description: "D", priority: .medium)
         var b = a
