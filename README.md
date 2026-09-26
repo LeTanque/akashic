@@ -2,6 +2,8 @@
 
 Native macOS menu-bar todo app (SwiftUI + SQLite). Accessory app with no Dock icon: use the **sparkles** menu-bar item for a compact popover, or **Open Akashic** for the detachable main editor window.
 
+![Akashic header](docs/akashic-header.png)
+
 ## Requirements
 
 - macOS 15 or later
