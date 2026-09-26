@@ -32,10 +32,14 @@ final class LiveMetricsTests: XCTestCase {
             cloudAgents: 2,
             bots: nil
         )
-        XCTAssertEqual(lines.full, "APP 42M  ·  SYS 18/36G  ·  CPU 23%  ·  CA 2")
-        XCTAssertEqual(lines.compact, "APP 42M  ·  CPU 23%  ·  CA 2")
-        XCTAssertEqual(lines.short, "APP 42M  ·  CA 2")
+        XCTAssertEqual(lines.full.top, "APP 42M  ·  SYS 18/36G")
+        XCTAssertEqual(lines.full.bottom, "CPU 23%  ·  CA 2")
+        XCTAssertEqual(lines.compact.top, "APP 42M")
+        XCTAssertEqual(lines.compact.bottom, "CPU 23%  ·  CA 2")
+        XCTAssertEqual(lines.short.top, "APP 42M")
+        XCTAssertEqual(lines.short.bottom, "CA 2")
         XCTAssertEqual(lines.minimal, "APP 42M")
+        XCTAssertEqual(lines.spoken, "APP 42M  ·  SYS 18/36G  ·  CPU 23%  ·  CA 2")
     }
 
     func testStripTextEmptyStatesAndOptionalBot() {
@@ -47,8 +51,11 @@ final class LiveMetricsTests: XCTestCase {
             cloudAgents: nil,
             bots: 1
         )
-        XCTAssertEqual(lines.full, "APP 8M  ·  SYS 4/8G  ·  CPU —  ·  CA —  ·  BOT 1")
-        XCTAssertEqual(lines.compact, "APP 8M  ·  CPU —  ·  CA —  ·  BOT 1")
+        XCTAssertEqual(lines.full.top, "APP 8M  ·  SYS 4/8G")
+        XCTAssertEqual(lines.full.bottom, "CPU —  ·  CA —  ·  BOT 1")
+        XCTAssertEqual(lines.compact.top, "APP 8M")
+        XCTAssertEqual(lines.compact.bottom, "CPU —  ·  CA —  ·  BOT 1")
+        XCTAssertEqual(lines.spoken, "APP 8M  ·  SYS 4/8G  ·  CPU —  ·  CA —  ·  BOT 1")
     }
 
     func testParseAgentMetricsSamplePayload() throws {

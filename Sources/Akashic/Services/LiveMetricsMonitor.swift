@@ -61,7 +61,7 @@ enum CompactBytes {
     private static let megabyte = kilobyte * 1024
     private static let gigabyte = megabyte * 1024
 
-    /// `42M`, `1.2G`, `512K` — short labels for one header line.
+    /// `42M`, `1.2G`, `512K` — short labels for the header HUD.
     static func format(_ bytes: UInt64) -> String {
         let value = Double(bytes)
         if value >= gigabyte { return scaled(value / gigabyte, suffix: "G") }
@@ -97,11 +97,21 @@ enum MetricsStripText {
     static let separator = "  ·  "
     static let empty = "—"
 
+    /// Two stacked header rows. `top` / `bottom` are left-aligned HUD lines.
+    struct Rows: Equatable {
+        var top: String
+        var bottom: String
+    }
+
     struct Lines: Equatable {
-        var full: String
-        var compact: String
-        var short: String
+        /// APP + SYS / CPU + CA (+ BOT on the second row when present).
+        var full: Rows
+        /// Drop SYS when the empty band is too narrow.
+        var compact: Rows
+        var short: Rows
         var minimal: String
+        /// Single spoken line for accessibility.
+        var spoken: String
     }
 
     static func make(
@@ -132,18 +142,21 @@ enum MetricsStripText {
             parts.joined(separator: separator)
         }
 
-        var fullParts = [app, sys, cpu, ca]
-        var compactParts = [app, cpu, ca]
+        var row2 = [cpu, ca]
+        var compactRow2 = [cpu, ca]
         if let bot {
-            fullParts.append(bot)
-            compactParts.append(bot)
+            row2.append(bot)
+            compactRow2.append(bot)
         }
 
+        let spokenParts = [app, sys, cpu, ca] + (bot.map { [$0] } ?? [])
+
         return Lines(
-            full: join(fullParts),
-            compact: join(compactParts),
-            short: join([app, ca]),
-            minimal: app
+            full: Rows(top: join([app, sys]), bottom: join(row2)),
+            compact: Rows(top: app, bottom: join(compactRow2)),
+            short: Rows(top: app, bottom: ca),
+            minimal: app,
+            spoken: join(spokenParts)
         )
     }
 }

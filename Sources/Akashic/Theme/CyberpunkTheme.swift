@@ -93,7 +93,7 @@ struct NeonWindowFrameModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .ignoresSafeArea(edges: .top)
+            .ignoresSafeArea(.container, edges: .top)
             .padding(contentInset)
             .background {
                 SmokedGlassFill(material: .hudWindow, smokeOpacity: 0.38)
@@ -155,16 +155,19 @@ struct CyberHeaderStrip<Trailing: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ZStack {
+            HStack(alignment: .center, spacing: 8) {
+                Color.clear
+                    .frame(minWidth: 0, maxWidth: .infinity)
                 AkashicHeaderWordmarkView()
                     .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
-                HStack(spacing: 8) {
-                    Spacer(minLength: 0)
-                    // Top header chrome only: band between centered wordmark and trailing actions.
+                    .layoutPriority(1)
+                HStack(alignment: .center, spacing: 8) {
+                    // Empty band between wordmark and +/import/close: left-aligned, two rows.
                     HeaderMetricsStrip()
                     trailing()
                         .layoutPriority(1)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
