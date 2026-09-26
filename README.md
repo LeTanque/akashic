@@ -96,6 +96,32 @@ Keyboard / menu bar only (no in-window buttons). Preference is persisted in User
 
 Todo titles, descriptions, and editors scale by an explicit point-size factor (chrome controls stay fixed).
 
+### Import from cyberpunk2044 / cyberpunk2077
+
+Use the stdlib Python importer to pull todos from a running cyberpunk-style app (`GET /api/todos`) or from a JSON seed file into Akashic’s SQLite database. New rows get fresh UUIDs; import **appends** by default (`--replace` deletes existing todos first). Quit or relaunch Akashic after importing so the UI picks up changes.
+
+Home API (default port 2044):
+
+```sh
+python3 scripts/import-from-cyberpunk.py
+# or explicitly:
+python3 scripts/import-from-cyberpunk.py --api http://127.0.0.1:2044/api/todos
+```
+
+Work fork or another host/port:
+
+```sh
+python3 scripts/import-from-cyberpunk.py --api http://127.0.0.1:PORT/api/todos
+```
+
+From a seed file (same shape as `seed-from-cyberpunk2044.json`):
+
+```sh
+python3 scripts/import-from-cyberpunk.py --json seed-from-cyberpunk2044.json
+```
+
+Other useful flags: `--db PATH`, `--dry-run`, `--write-seed PATH` (save the fetched payload for reuse).
+
 ## Development notes
 
 - Only the large checkbox toggles completion; clicking anywhere else on the row opens that todo for editing.
