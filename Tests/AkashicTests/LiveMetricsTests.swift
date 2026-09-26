@@ -101,18 +101,30 @@ final class LiveMetricsTests: XCTestCase {
                 activeCloudAgents: 2,
                 runningCloudAgents: [],
                 activeBots: 3,
-                updatedAt: now.addingTimeInterval(-60)
+                updatedAt: now.addingTimeInterval(-AgentMetricsStore.staleAfter)
             )
         )
         XCTAssertNil(store.displayedCloudAgentCount(at: now))
         XCTAssertNil(store.displayedBotCount(at: now))
+
+        // 5-minute Grok Bot interval is still inside the ~7-minute window.
+        store.replace(
+            AgentMetricsPayload(
+                activeCloudAgents: 2,
+                runningCloudAgents: [],
+                activeBots: 3,
+                updatedAt: now.addingTimeInterval(-5 * 60)
+            )
+        )
+        XCTAssertEqual(store.displayedCloudAgentCount(at: now), 2)
+        XCTAssertEqual(store.displayedBotCount(at: now), 3)
 
         store.replace(
             AgentMetricsPayload(
                 activeCloudAgents: 2,
                 runningCloudAgents: [],
                 activeBots: 3,
-                updatedAt: now.addingTimeInterval(-59)
+                updatedAt: now.addingTimeInterval(-(AgentMetricsStore.staleAfter - 1))
             )
         )
         XCTAssertEqual(store.displayedCloudAgentCount(at: now), 2)

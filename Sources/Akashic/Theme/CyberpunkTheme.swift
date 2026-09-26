@@ -160,6 +160,7 @@ struct CyberHeaderStrip<Trailing: View>: View {
                     .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    // Top header chrome only: band between centered wordmark and trailing actions.
                     HeaderMetricsStrip()
                     trailing()
                         .layoutPriority(1)

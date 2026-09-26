@@ -2,12 +2,14 @@ import Combine
 import Foundation
 
 /// Last ingested cloud-agent feed (`PUT /v1/agent-metrics`). In-memory only —
-/// a payload older than 60s is treated as missing for display so CA never
-/// shows a stale or invented zero.
+/// a payload older than ~7 minutes is treated as missing for display so CA
+/// never shows a stale or invented zero. Lou’s Grok Bot routine can only
+/// push about every 5 minutes; 7 minutes leaves slack between those beats.
 @MainActor
 final class AgentMetricsStore: ObservableObject {
     static let shared = AgentMetricsStore()
-    static let staleAfter: TimeInterval = 60
+    /// Fresh window for CA / BOT. Longer than the ~5 minute push interval.
+    static let staleAfter: TimeInterval = 7 * 60
 
     @Published private(set) var lastPayload: AgentMetricsPayload?
 
