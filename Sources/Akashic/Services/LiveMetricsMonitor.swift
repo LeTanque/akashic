@@ -95,6 +95,8 @@ enum CompactBytes {
 
 enum MetricsStripText {
     static let separator = "  ·  "
+    /// Same four metrics; only the gutter between labels shrinks.
+    static let tightSeparator = " · "
     static let empty = "—"
 
     /// Two stacked header rows. `top` / `bottom` are left-aligned HUD lines.
@@ -106,10 +108,8 @@ enum MetricsStripText {
     struct Lines: Equatable {
         /// APP + SYS / CPU + CA (+ BOT on the second row when present).
         var full: Rows
-        /// Drop SYS when the empty band is too narrow.
-        var compact: Rows
-        var short: Rows
-        var minimal: String
+        /// Same four metrics with a tighter separator — never drops SYS or CPU.
+        var tight: Rows
         /// Single spoken line for accessibility.
         var spoken: String
     }
@@ -138,24 +138,23 @@ enum MetricsStripText {
         }()
         let bot = bots.map { "BOT \($0)" }
 
-        func join(_ parts: [String]) -> String {
+        func join(_ parts: [String], separator: String = separator) -> String {
             parts.joined(separator: separator)
         }
 
         var row2 = [cpu, ca]
-        var compactRow2 = [cpu, ca]
         if let bot {
             row2.append(bot)
-            compactRow2.append(bot)
         }
 
         let spokenParts = [app, sys, cpu, ca] + (bot.map { [$0] } ?? [])
 
         return Lines(
             full: Rows(top: join([app, sys]), bottom: join(row2)),
-            compact: Rows(top: app, bottom: join(compactRow2)),
-            short: Rows(top: app, bottom: ca),
-            minimal: app,
+            tight: Rows(
+                top: join([app, sys], separator: tightSeparator),
+                bottom: join(row2, separator: tightSeparator)
+            ),
             spoken: join(spokenParts)
         )
     }

@@ -47,9 +47,10 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(CyberpunkTheme.windowTopChromeVeilHeight, 28)
     }
 
-    /// Metrics must sit in the leading column, left of the centered wordmark —
-    /// not in the trailing flex band with +/import/close.
-    func testHeaderStripSourcePlacesMetricsLeftOfWordmark() throws {
+    /// Metrics flush left, wordmark geometrically centered in the window,
+    /// buttons flush right — not an equal-flex HStack that shifts the logo
+    /// when the two side clusters have different widths.
+    func testHeaderStripSourceCentersWordmarkIndependentlyOfSideColumns() throws {
         let themeURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -62,24 +63,56 @@ final class MainWindowChromeTests: XCTestCase {
         let after = String(source[stripRange.lowerBound...])
         let stripEnd = after.range(of: "\nstruct CyberBorderedButtonStyle")?.lowerBound ?? after.endIndex
         let strip = String(after[..<stripEnd])
-        guard let metrics = strip.range(of: "HeaderMetricsStrip()"),
-              let wordmark = strip.range(of: "AkashicHeaderWordmarkView()")
-        else {
-            return XCTFail("Header strip is missing metrics or wordmark")
-        }
-        XCTAssertLessThan(
-            metrics.lowerBound,
-            wordmark.lowerBound,
-            "HeaderMetricsStrip must be laid out before (left of) the wordmark"
+        XCTAssertTrue(
+            strip.contains("ZStack"),
+            "Wordmark must be overlaid at the window center, not flex-centered between unequal columns"
+        )
+        XCTAssertTrue(
+            strip.contains("HeaderMetricsStrip()"),
+            "Header strip is missing metrics"
+        )
+        XCTAssertTrue(
+            strip.contains("AkashicHeaderWordmarkView()"),
+            "Header strip is missing the wordmark"
+        )
+        XCTAssertTrue(
+            strip.contains("Spacer(minLength:"),
+            "HStack must push metrics left and buttons right around the centered wordmark"
         )
         XCTAssertFalse(
             strip.contains("Color.clear"),
             "Leading flex spacer would push metrics off the content's left edge"
         )
+        XCTAssertFalse(
+            strip.contains("layoutPriority"),
+            "layoutPriority on a flex column starves the other side (PR #10 ViewThatFits collapse)"
+        )
         XCTAssertTrue(
             strip.contains("WindowDragRegion()"),
             "Header must keep the window-drag region"
         )
+    }
+
+    /// The main-window HUD must always render APP/SYS + CPU/CA. ViewThatFits
+    /// falling back to short (APP+CA) or minimal (APP) is the PR #10 bug.
+    func testHeaderMetricsStripAlwaysShowsFullTwoRows() throws {
+        let stripURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Akashic/Views/HeaderMetricsStrip.swift")
+        let source = try String(contentsOf: stripURL, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("stacked(lines.full)"),
+            "Header metrics must render the full APP/SYS + CPU/CA rows"
+        )
+        XCTAssertFalse(
+            source.contains("ViewThatFits("),
+            "ViewThatFits must not drop SYS/CPU when the leading column is tight"
+        )
+        XCTAssertFalse(source.contains("lines.short"), "short row pair omits SYS/CPU")
+        XCTAssertFalse(source.contains("lines.minimal"), "minimal row omits SYS/CPU/CA")
+        XCTAssertFalse(source.contains("lines.compact"), "compact row omits SYS")
     }
 
     /// AppKit throws (SIGTRAP via `+[NSApplication _crashOnException:]`) if these
