@@ -90,7 +90,9 @@ Todo titles, descriptions, and editors scale by an explicit point-size factor (c
 
 ## Development notes
 
-- Only the large checkbox toggles completion; title and description clicks open/select for editing.
+- Only the large checkbox toggles completion; clicking anywhere else on the row opens that todo for editing.
+- New todos open in the editor immediately. Selecting a todo does not change its list position.
+- Click-hold-drag reorders the list. Default stack is high → medium → low; drag can override that. Completed items stay at the bottom.
 - Title and description support Markdown, including tappable links.
 - Priority: high / medium / low. Optional **complete by** date and time; **created on** and **completed at** are stored and shown when set.
 - Dependencies: [GRDB](https://github.com/groue/GRDB.swift), [FlyingFox](https://github.com/swhitty/FlyingFox).

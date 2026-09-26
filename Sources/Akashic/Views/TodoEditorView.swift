@@ -26,7 +26,7 @@ struct TodoEditorView: View {
                             .scrollContentBackground(.hidden)
                             .padding(8)
                             .cyberPanel()
-                            .onChange(of: draft.title) { _, _ in commit() }
+                            .onChange(of: draft.title) { _, _ in commitIfChanged() }
 
                         CompletionCheckbox(
                             completed: draft.completed,
@@ -52,7 +52,7 @@ struct TodoEditorView: View {
                         .scrollContentBackground(.hidden)
                         .padding(8)
                         .cyberPanel()
-                        .onChange(of: draft.description) { _, _ in commit() }
+                        .onChange(of: draft.description) { _, _ in commitIfChanged() }
                 }
 
                 metadataSection
@@ -95,16 +95,16 @@ struct TodoEditorView: View {
                 .pickerStyle(.menu)
             }
             .foregroundStyle(CyberpunkTheme.priorityColor(draft.priority))
-            .onChange(of: draft.priority) { _, _ in commit() }
+            .onChange(of: draft.priority) { _, _ in commitIfChanged() }
 
             Toggle("Complete by", isOn: $hasCompleteBy)
                 .onChange(of: hasCompleteBy) { _, enabled in
                     if !enabled {
                         draft.completeBy = nil
-                        commit()
+                        commitIfChanged()
                     } else if draft.completeBy == nil {
                         draft.completeBy = Date()
-                        commit()
+                        commitIfChanged()
                     }
                 }
 
@@ -113,7 +113,7 @@ struct TodoEditorView: View {
                     "Due",
                     selection: Binding(
                         get: { draft.completeBy ?? Date() },
-                        set: { draft.completeBy = $0; commit() }
+                        set: { draft.completeBy = $0; commitIfChanged() }
                     ),
                     displayedComponents: [.date, .hourAndMinute]
                 )
@@ -140,7 +140,15 @@ struct TodoEditorView: View {
         .cyberPanel()
     }
 
-    private func commit() {
-        store.update(draft)
+    /// Skip no-op writes so selecting a todo (which reloads `draft`) cannot bump `updated_at`.
+    private func commitIfChanged() {
+        guard let existing = store.todos.first(where: { $0.id == draft.id }) else { return }
+        guard !draft.hasSameEditableContent(as: existing) else { return }
+        var toSave = existing
+        toSave.title = draft.title
+        toSave.description = draft.description
+        toSave.priority = draft.priority
+        toSave.completeBy = draft.completeBy
+        store.update(toSave)
     }
 }

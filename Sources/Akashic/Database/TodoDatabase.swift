@@ -9,6 +9,13 @@ enum TodoDatabase {
         return queue
     }
 
+    /// Empty on-disk-less database for unit tests. Applies the same migrations as the live DB.
+    static func openInMemory() throws -> DatabaseQueue {
+        let queue = try DatabaseQueue()
+        try migrator.migrate(queue)
+        return queue
+    }
+
     private static func databaseURL() throws -> URL {
         let appSupport = try FileManager.default.url(
             for: .applicationSupportDirectory,
@@ -34,6 +41,19 @@ enum TodoDatabase {
                 t.column(TodoItem.Columns.createdOn.name, .datetime).notNull()
                 t.column(TodoItem.Columns.updatedAt.name, .datetime).notNull()
                 t.column(TodoItem.Columns.completedAt.name, .datetime)
+            }
+        }
+        migrator.registerMigration("addSortOrder") { db in
+            try db.alter(table: TodoItem.databaseTableName) { t in
+                t.add(column: TodoItem.Columns.sortOrder.name, .integer).notNull().defaults(to: 0)
+            }
+            let items = try TodoItem.fetchAll(db)
+            let ordered = items.sorted(by: TodoItem.defaultStackOrder)
+            for (index, item) in ordered.enumerated() {
+                try db.execute(
+                    sql: "UPDATE \(TodoItem.databaseTableName) SET sort_order = ? WHERE id = ?",
+                    arguments: [index, item.id.uuidString]
+                )
             }
         }
         return migrator

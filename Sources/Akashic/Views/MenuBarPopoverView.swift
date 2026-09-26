@@ -12,24 +12,9 @@ struct MenuBarPopoverView: View {
                 .fill(CyberpunkTheme.neonCyan)
                 .frame(height: 1)
                 .shadow(color: CyberpunkTheme.neonCyan.opacity(0.45), radius: 3)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(store.todos) { todo in
-                        TodoRowView(
-                            todo: todo,
-                            compact: true,
-                            onToggleComplete: { store.toggleCompletion(for: todo.id) },
-                            onSelect: {
-                                store.selectedTodoID = todo.id
-                                openWindow(id: "main")
-                            }
-                        )
-                        .padding(.horizontal, 12)
-                        Divider()
-                            .overlay(CyberpunkTheme.rowDivider)
-                    }
-                }
-                .padding(.vertical, 8)
+            TodoListContent(todos: store.todos, compact: true) { todo in
+                store.selectedTodoID = todo.id
+                openWindow(id: "main")
             }
             .frame(maxHeight: 360)
             Rectangle()
@@ -66,6 +51,7 @@ struct MenuBarPopoverView: View {
         HStack {
             Button {
                 store.addTodo()
+                openWindow(id: "main")
             } label: {
                 Label("Add", systemImage: "plus")
             }

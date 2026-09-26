@@ -69,27 +69,8 @@ struct MainWindowView: View {
     private var todoListColumn: some View {
         VStack(spacing: 0) {
             filterStrip
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(filteredTodos) { todo in
-                        TodoRowView(
-                            todo: todo,
-                            compact: false,
-                            onToggleComplete: { store.toggleCompletion(for: todo.id) },
-                            onSelect: { store.selectedTodoID = todo.id }
-                        )
-                        .background(
-                            store.selectedTodoID == todo.id
-                                ? CyberpunkTheme.completedShaded.opacity(0.22)
-                                : CyberpunkTheme.background
-                        )
-                        .overlay(alignment: .bottom) {
-                            Rectangle()
-                                .fill(CyberpunkTheme.rowDivider)
-                                .frame(height: 1)
-                        }
-                    }
-                }
+            TodoListContent(todos: filteredTodos) { todo in
+                store.selectedTodoID = todo.id
             }
         }
         .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
@@ -100,6 +81,7 @@ struct MainWindowView: View {
     private var detailColumn: some View {
         if let todo = store.selectedTodo {
             TodoEditorView(todo: todo)
+                .id(todo.id)
         } else {
             VStack(spacing: 12) {
                 Text("Select a todo")
