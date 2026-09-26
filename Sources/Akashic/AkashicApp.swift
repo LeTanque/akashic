@@ -28,6 +28,7 @@ struct AkashicApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .defaultSize(width: 920, height: 620)
         .defaultLaunchBehavior(.presented)
         .commands {
