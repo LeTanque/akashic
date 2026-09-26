@@ -49,7 +49,12 @@ struct CyberPanelModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(CyberpunkTheme.background)
+            .background {
+                ZStack {
+                    GlassBackground(material: .hudWindow, blendingMode: .behindWindow)
+                    Color.black.opacity(0.4)
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
@@ -88,8 +93,11 @@ struct NeonWindowFrameModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .ignoresSafeArea(edges: .top)
             .padding(contentInset)
-            .background(CyberpunkTheme.background)
+            .background {
+                SmokedGlassFill(material: .hudWindow, smokeOpacity: 0.38)
+            }
             .clipShape(NeonWindowShellShape())
             .overlay {
                 NeonWindowShellShape()
@@ -100,12 +108,11 @@ struct NeonWindowFrameModifier: ViewModifier {
             .overlay {
                 NeonWindowShellShape()
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
                     .allowsHitTesting(false)
             }
             .padding(glowClearance)
-            .compositingGroup()
-            .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
-            .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
     }
 }
 
@@ -128,6 +135,7 @@ private struct AkashicHeaderWordmarkView: View {
                     .interpolation(.high)
                     .scaledToFit()
                     .frame(height: CyberpunkTheme.headerWordmarkHeight)
+                    .background(Color.clear)
             } else {
                 Text("Akashic")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
@@ -157,14 +165,15 @@ struct CyberHeaderStrip<Trailing: View>: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.top, 0)
+            .padding(.bottom, 10)
             .background(WindowDragRegion())
             Rectangle()
                 .fill(CyberpunkTheme.neonCyan)
                 .frame(height: 1)
                 .shadow(color: CyberpunkTheme.neonCyan.opacity(0.5), radius: 4)
         }
-        .background(CyberpunkTheme.background)
+        .background(Color.black.opacity(0.18))
     }
 }
 

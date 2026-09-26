@@ -20,8 +20,15 @@ final class TodoStore: ObservableObject {
         apiServer.start(store: self)
     }
 
-    deinit {
-        // Task cancellation is fire-and-forget; server tears down with process.
+    /// Empty in-memory store for tests. Does not seed or start the HTTP API.
+    init(db: DatabaseQueue) {
+        self.db = db
+        refresh()
+    }
+
+    /// Testing hook: empty in-memory database, no seed, no API server.
+    static func isolatedForTesting() throws -> TodoStore {
+        try TodoStore(db: TodoDatabase.openInMemory())
     }
 
     var selectedTodo: TodoItem? {
@@ -32,16 +39,19 @@ final class TodoStore: ObservableObject {
     func refresh() {
         todos = (try? db.read { db in
             try TodoItem
-                .order(TodoItem.Columns.completed.asc, TodoItem.Columns.priority.asc, TodoItem.Columns.updatedAt.desc)
+                .order(
+                    TodoItem.Columns.completed.asc,
+                    TodoItem.Columns.sortOrder.asc,
+                    TodoItem.Columns.updatedAt.desc
+                )
                 .fetchAll(db)
         }) ?? []
         sortTodosInMemory()
     }
 
     func addTodo(title: String = "New todo") {
-        var item = TodoItem.new(title: title)
-        item.updatedAt = Date()
-        persist(item)
+        let item = insertNewTodo(title: title)
+        selectedTodoID = item.id
     }
 
     @discardableResult
@@ -50,16 +60,17 @@ final class TodoStore: ObservableObject {
         description: String = "",
         priority: TodoPriority = .medium
     ) -> TodoItem {
-        var item = TodoItem.new(title: title, description: description, priority: priority)
-        item.updatedAt = Date()
-        persist(item)
-        return item
+        insertNewTodo(title: title, description: description, priority: priority)
     }
 
     func update(_ item: TodoItem) {
+        guard let existing = todos.first(where: { $0.id == item.id }) else {
+            persist(item, bumpUpdatedAt: true)
+            return
+        }
         var copy = item
-        copy.updatedAt = Date()
-        persist(copy)
+        copy.sortOrder = existing.sortOrder
+        persist(copy, bumpUpdatedAt: true)
     }
 
     func delete(_ item: TodoItem) {
@@ -88,7 +99,7 @@ final class TodoStore: ObservableObject {
         } else {
             item.completedAt = nil
         }
-        persist(item)
+        persist(item, bumpUpdatedAt: false)
     }
 
     func todos(status: String) -> [TodoItem] {
@@ -120,9 +131,25 @@ final class TodoStore: ObservableObject {
             item.completed = completed
             item.completedAt = completed ? Date() : nil
         }
-        item.updatedAt = Date()
-        persist(item)
-        return item
+        persist(item, bumpUpdatedAt: true)
+        return todos.first { $0.id == id }
+    }
+
+    /// Drag-reorder within the currently displayed (possibly filtered) list.
+    /// Completed items stay stacked after incomplete items; priority does not block the drop.
+    func moveTodos(from source: IndexSet, to destination: Int, in displayed: [TodoItem]) {
+        var reordered = displayed
+        reordered.move(fromOffsets: source, toOffset: destination)
+        applyManualOrder(reordered)
+    }
+
+    func applyManualOrder(_ orderedSubset: [TodoItem]) {
+        let incomplete = orderedSubset.filter { !$0.completed }
+        let complete = orderedSubset.filter(\.completed)
+        var next = todos
+        next = Self.replacingRelativeOrder(in: next, with: incomplete)
+        next = Self.replacingRelativeOrder(in: next, with: complete)
+        writeOrder(next)
     }
 
     func importSeedFromBundle(replaceExisting: Bool) {
@@ -156,14 +183,59 @@ final class TodoStore: ObservableObject {
         }
     }
 
-    private func persist(_ item: TodoItem) {
+    @discardableResult
+    private func insertNewTodo(
+        title: String,
+        description: String = "",
+        priority: TodoPriority = .medium
+    ) -> TodoItem {
+        var item = TodoItem.new(title: title, description: description, priority: priority)
+        item.updatedAt = Date()
+        var list = todos
+        let index = Self.insertionIndex(for: item.priority, in: list)
+        list.insert(item, at: index)
+        let id = item.id
+        writeOrder(list)
+        return todos.first { $0.id == id } ?? item
+    }
+
+    /// Insert at the start of the matching priority band among incomplete items (high-first default).
+    static func insertionIndex(for priority: TodoPriority, in items: [TodoItem]) -> Int {
+        items.firstIndex {
+            !$0.completed && $0.priority.sortOrder >= priority.sortOrder
+        } ?? items.firstIndex(where: \.completed) ?? items.count
+    }
+
+    static func replacingRelativeOrder(in items: [TodoItem], with orderedSubset: [TodoItem]) -> [TodoItem] {
+        guard !orderedSubset.isEmpty else { return items }
+        let ids = Set(orderedSubset.map(\.id))
+        var iterator = orderedSubset.makeIterator()
+        return items.map { item in
+            guard ids.contains(item.id), let replacement = iterator.next() else { return item }
+            return replacement
+        }
+    }
+
+    private func writeOrder(_ items: [TodoItem]) {
         try? db.write { db in
-            try item.save(db)
+            for (index, item) in items.enumerated() {
+                var copy = item
+                copy.sortOrder = index
+                try copy.save(db)
+            }
         }
         refresh()
-        if let idx = todos.firstIndex(where: { $0.id == item.id }) {
-            todos[idx] = item
+    }
+
+    private func persist(_ item: TodoItem, bumpUpdatedAt: Bool) {
+        var copy = item
+        if bumpUpdatedAt {
+            copy.updatedAt = Date()
         }
+        try? db.write { db in
+            try copy.save(db)
+        }
+        refresh()
     }
 
     private func runFirstLaunchSeedIfNeeded() {
@@ -176,9 +248,7 @@ final class TodoStore: ObservableObject {
     private func sortTodosInMemory() {
         todos.sort { lhs, rhs in
             if lhs.completed != rhs.completed { return !lhs.completed && rhs.completed }
-            if lhs.priority.sortOrder != rhs.priority.sortOrder {
-                return lhs.priority.sortOrder < rhs.priority.sortOrder
-            }
+            if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
             return lhs.updatedAt > rhs.updatedAt
         }
     }

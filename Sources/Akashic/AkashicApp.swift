@@ -32,8 +32,11 @@ struct AkashicApp: App {
         .defaultLaunchBehavior(.presented)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Todo") { store.addTodo() }
-                    .keyboardShortcut("n", modifiers: .command)
+                Button("New Todo") {
+                    store.addTodo()
+                    NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
+                }
+                .keyboardShortcut("n", modifiers: .command)
             }
             zoomCommands
         }

@@ -41,14 +41,27 @@ enum SeedImporter {
     }
 
     static func importItems(_ items: [TodoItem], into db: DatabaseQueue, replaceExisting: Bool) throws -> Int {
-        try db.write { database in
+        let ordered = items.sorted(by: TodoItem.defaultStackOrder)
+        return try db.write { database in
             if replaceExisting {
                 try TodoItem.deleteAll(database)
             }
-            for item in items {
-                try item.insert(database)
+            let base: Int
+            if replaceExisting {
+                base = 0
+            } else {
+                let maxOrder = try Int.fetchOne(
+                    database,
+                    sql: "SELECT MAX(sort_order) FROM \(TodoItem.databaseTableName)"
+                )
+                base = (maxOrder ?? -1) + 1
             }
-            return items.count
+            for (index, item) in ordered.enumerated() {
+                var copy = item
+                copy.sortOrder = base + index
+                try copy.insert(database)
+            }
+            return ordered.count
         }
     }
 
@@ -67,7 +80,8 @@ enum SeedImporter {
             completeBy: nil,
             createdOn: created,
             updatedAt: updated,
-            completedAt: completedAt
+            completedAt: completedAt,
+            sortOrder: 0
         )
     }
 
