@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Compact, display-only HUD in the main-window top header chrome
 /// (`CyberHeaderStrip`, leading-aligned to the left of the wordmark).
-/// Not a side panel or bottom inset; not shown in the menu-bar popover.
+/// Always shows both rows (APP/SYS and CPU/CA). Not a side panel or
+/// bottom inset; not shown in the menu-bar popover.
 struct HeaderMetricsStrip: View {
     @StateObject private var live = LiveMetricsMonitor()
     @ObservedObject private var agents = AgentMetricsStore.shared
@@ -17,18 +18,15 @@ struct HeaderMetricsStrip: View {
             bots: agents.displayedBotCount()
         )
 
-        ViewThatFits(in: .horizontal) {
-            stacked(lines.full)
-            stacked(lines.compact)
-            stacked(lines.short)
-            stacked(MetricsStripText.Rows(top: lines.minimal, bottom: ""))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(lines.spoken)
-        .allowsHitTesting(false)
-        .onAppear { live.start() }
-        .onDisappear { live.stop() }
+        // Always the full two rows. ViewThatFits used to fall back to
+        // APP+CA (or APP only) when the leading flex column was starved —
+        // that omitted SYS/CPU and is the bug Frank hit after PR #10.
+        stacked(lines.full)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(lines.spoken)
+            .allowsHitTesting(false)
+            .onAppear { live.start() }
+            .onDisappear { live.stop() }
     }
 
     private func stacked(_ rows: MetricsStripText.Rows) -> some View {
