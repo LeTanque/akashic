@@ -158,9 +158,12 @@ struct CyberHeaderStrip<Trailing: View>: View {
             ZStack {
                 AkashicHeaderWordmarkView()
                     .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    // Top header chrome only: band between centered wordmark and trailing actions.
+                    HeaderMetricsStrip()
                     trailing()
+                        .layoutPriority(1)
                 }
             }
             .frame(maxWidth: .infinity)

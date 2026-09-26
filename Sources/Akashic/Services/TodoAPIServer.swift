@@ -104,6 +104,24 @@ final class TodoAPIServer: @unchecked Sendable {
             }
             return json(["error": "not found"], status: .notFound)
         }
+
+        await server.appendRoute("PUT /v1/agent-metrics") { request in
+            let bodyData = try await request.bodyData
+            switch AgentMetricsPayload.parse(bodyData) {
+            case .success(let payload):
+                await AgentMetricsStore.shared.replace(payload)
+                return json(payload)
+            case .failure(let error):
+                return json(["error": error.message], status: .badRequest)
+            }
+        }
+
+        await server.appendRoute("GET /v1/agent-metrics") { _ in
+            if let payload = await AgentMetricsStore.shared.lastPayload {
+                return json(payload)
+            }
+            return json(["error": "no agent metrics yet"], status: .notFound)
+        }
     }
 
     private static func parseDate(_ raw: String) -> Date? {
