@@ -93,6 +93,7 @@ struct NeonWindowFrameModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .ignoresSafeArea(edges: .top)
             .padding(contentInset)
             .background {
                 SmokedGlassFill(material: .hudWindow, smokeOpacity: 0.38)
@@ -163,7 +164,8 @@ struct CyberHeaderStrip<Trailing: View>: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.top, 0)
+            .padding(.bottom, 10)
             .background(WindowDragRegion())
             Rectangle()
                 .fill(CyberpunkTheme.neonCyan)

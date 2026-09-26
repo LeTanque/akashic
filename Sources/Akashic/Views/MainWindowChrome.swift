@@ -75,6 +75,7 @@ final class MainWindowChromeStripperView: NSView {
 
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = false
         window.hasShadow = true
