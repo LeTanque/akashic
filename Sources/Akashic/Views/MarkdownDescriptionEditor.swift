@@ -76,6 +76,8 @@ struct MarkdownSourceEditor: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.scrollerStyle = .overlay
         scrollView.focusRingType = .none
+        scrollView.contentView.drawsBackground = false
+        scrollView.contentView.backgroundColor = .clear
 
         guard let textView = scrollView.documentView as? NSTextView else {
             return scrollView
@@ -121,11 +123,9 @@ struct MarkdownSourceEditor: NSViewRepresentable {
         textView.allowsUndo = true
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
         textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(
-            width: textView.bounds.width,
-            height: CGFloat.greatestFiniteMagnitude
-        )
+        textView.textContainer?.heightTracksTextView = false
         textView.textContainerInset = NSSize(width: 2, height: 4)
         textView.focusRingType = .none
         textView.insertionPointColor = MarkdownEditorChrome.neonCyan
