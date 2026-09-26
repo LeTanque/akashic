@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Compact, display-only HUD in the main-window top header chrome
-/// (`CyberHeaderStrip`, between the wordmark and +/import/close).
+/// (`CyberHeaderStrip`, leading-aligned to the left of the wordmark).
 /// Not a side panel or bottom inset; not shown in the menu-bar popover.
 struct HeaderMetricsStrip: View {
     @StateObject private var live = LiveMetricsMonitor()

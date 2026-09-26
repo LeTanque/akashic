@@ -43,7 +43,7 @@ Use **Import demo seed** or **Import JSON…** in the main window only when you 
 
 While Akashic is running, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
 
-The main-window **top header chrome** (`CyberHeaderStrip`, between the Akashic wordmark and the trailing +/import/close icons) shows a live metrics strip: process RSS, system memory, aggregate CPU, and an ingested cloud-agent count. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
+The main-window **top header chrome** (`CyberHeaderStrip`) shows a live metrics strip **to the left of** the centered Akashic wordmark, flush with the leading content / neon inset: process RSS, system memory, aggregate CPU, and an ingested cloud-agent count. Trailing +/import/close stay on the right. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
 
 | Method | Path | Notes |
 |--------|------|--------|

@@ -33,6 +33,12 @@ enum CyberpunkTheme {
     static let headerWordmarkHeight: CGFloat = 38
     /// Optical vertical nudge (wordmark reads low vs square header buttons).
     static let headerWordmarkVerticalOffset: CGFloat = -3
+    /// Tight pad above/below the wordmark–metrics–buttons row (not a tall empty band).
+    static let headerStripVerticalPadding: CGFloat = 4
+    /// Header row sits on the neon content inset; no extra leading inset before metrics.
+    static let headerStripLeadingPadding: CGFloat = 0
+    /// Trailing icon buttons align to the same content edge as the neon inset.
+    static let headerStripTrailingPadding: CGFloat = 0
 
     static func priorityColor(_ priority: TodoPriority) -> Color {
         switch priority {
@@ -164,24 +170,24 @@ struct CyberHeaderStrip<Trailing: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 8) {
-                Color.clear
-                    .frame(minWidth: 0, maxWidth: .infinity)
+            HStack(alignment: .center, spacing: 10) {
+                // Leading column: APP/SYS / CPU/CA flush with the content / neon inset.
+                HeaderMetricsStrip()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 AkashicHeaderWordmarkView()
                     .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
                     .layoutPriority(1)
-                HStack(alignment: .center, spacing: 8) {
-                    // Empty band between wordmark and +/import/close: left-aligned, two rows.
-                    HeaderMetricsStrip()
-                    trailing()
-                        .layoutPriority(1)
-                }
-                .frame(minWidth: 0, maxWidth: .infinity)
+
+                // Matching flex column so the wordmark stays optically centered.
+                trailing()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .layoutPriority(1)
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 12)
-            .padding(.top, 0)
-            .padding(.bottom, 10)
+            .padding(.leading, CyberpunkTheme.headerStripLeadingPadding)
+            .padding(.trailing, CyberpunkTheme.headerStripTrailingPadding)
+            .padding(.vertical, CyberpunkTheme.headerStripVerticalPadding)
             .background(WindowDragRegion())
             Rectangle()
                 .fill(CyberpunkTheme.neonCyan)
@@ -189,6 +195,7 @@ struct CyberHeaderStrip<Trailing: View>: View {
                 .shadow(color: CyberpunkTheme.neonCyan.opacity(0.5), radius: 4)
         }
         .background(Color.black.opacity(0.18))
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
 

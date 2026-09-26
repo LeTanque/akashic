@@ -233,6 +233,7 @@ enum MainWindowSystemChromeCollapser {
     static func apply(to window: NSWindow) {
         collapseTitlebarViews(in: window.contentView?.superview)
         collapseTitlebarViews(in: window.contentView)
+        collapseTitlebarFromStandardButtons(in: window)
         neutralizeHostingSafeArea(in: window.contentView)
         neutralizeHostingSafeArea(in: window.contentView?.superview)
         if let contentView = window.contentView {
@@ -244,22 +245,47 @@ enum MainWindowSystemChromeCollapser {
         guard let root else { return }
         let name = String(describing: type(of: root))
         if isTitlebarChrome(name) {
-            root.isHidden = true
-            root.alphaValue = 0
-            if root.frame.height > 0.5 {
-                root.setFrameSize(NSSize(width: root.frame.width, height: 0))
-            }
+            collapse(root)
         }
         for child in root.subviews {
             collapseTitlebarViews(in: child)
         }
     }
 
+    /// Traffic-light buttons live in the titlebar even when hidden; walk up and
+    /// collapse that container if the theme-frame walk missed a renamed class.
+    private static func collapseTitlebarFromStandardButtons(in window: NSWindow) {
+        guard let close = window.standardWindowButton(.closeButton) else { return }
+        var node: NSView? = close.superview
+        while let current = node {
+            if isTitlebarChrome(String(describing: type(of: current))) {
+                collapse(current)
+            }
+            node = current.superview
+            if current === window.contentView || current === window.contentView?.superview {
+                break
+            }
+        }
+    }
+
+    private static func collapse(_ view: NSView) {
+        view.isHidden = true
+        view.alphaValue = 0
+        // Re-applied every `stripNow()` / layout pass. Do not add Auto Layout
+        // height constraints or flip `translatesAutoresizingMaskIntoConstraints`
+        // on private titlebar views — that fights NSThemeFrame.
+        if view.frame.height > 0.5 {
+            view.setFrameSize(NSSize(width: view.frame.width, height: 0))
+        }
+    }
+
     private static func isTitlebarChrome(_ typeName: String) -> Bool {
-        typeName.contains("NSTitlebarContainerView")
-            || typeName.contains("NSTitlebarView")
-            || typeName.contains("NSTitlebarAccessoryClipView")
-            || typeName.contains("NSToolbarTitlebar")
+        let name = typeName.lowercased()
+        // Never hide the theme frame / content view — only the titlebar band.
+        if name.contains("themeframe") || name.contains("nswindow") {
+            return false
+        }
+        return name.contains("titlebar") || name.contains("toolbartitlebar")
     }
 
     private static func neutralizeHostingSafeArea(in root: NSView?) {
