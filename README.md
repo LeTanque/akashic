@@ -43,7 +43,7 @@ Use **Import demo seed** or **Import JSON…** in the main window only when you 
 
 While Akashic is running, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
 
-The main-window **top header chrome** (`CyberHeaderStrip`) is three independent alignments: a live two-row metrics strip **flush left** (APP + SYS over CPU + CA), the Akashic wordmark **centered in the window**, and +/import/close **flush right**. Both metric rows stay visible — the strip does not drop SYS or CPU when the header is tight. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
+The main-window **top header chrome** (`CyberHeaderStrip`) is three independent alignments: a live two-row metrics strip **flush left** (DISK + SYS over CPU + CA), the Akashic wordmark **centered in the window**, and +/import/close **flush right**. Both metric rows stay visible — the strip does not drop SYS or CPU when the header is tight. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
 
 | Method | Path | Notes |
 |--------|------|--------|
