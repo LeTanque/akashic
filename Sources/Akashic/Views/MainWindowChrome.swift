@@ -95,8 +95,8 @@ enum MainWindowOpaqueFillClearer {
     private static func clear(in root: NSView?) {
         guard let root else { return }
         if let split = root as? NSSplitView {
-            split.isOpaque = false
             split.wantsLayer = true
+            split.layer?.isOpaque = false
             split.layer?.backgroundColor = NSColor.clear.cgColor
         }
         if let scroll = root as? NSScrollView {
