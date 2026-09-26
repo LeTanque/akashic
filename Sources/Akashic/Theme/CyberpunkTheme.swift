@@ -21,10 +21,10 @@ enum CyberpunkTheme {
     static let panel = background
     /// Bottom corners of the frameless main window shell (~macOS default).
     static let windowBottomCornerRadius: CGFloat = 11
-    /// Space between window edge and neon frame (room for outer glow / shadows).
-    static let windowNeonGlowClearance: CGFloat = 14
-    /// Padding inside the neon stroke before app content.
-    static let windowNeonContentInset: CGFloat = 16
+    /// Space between window edge and neon frame (tight room for outer glow / shadows).
+    static let windowNeonGlowClearance: CGFloat = 8
+    /// Padding inside the neon stroke before app content (even on all sides).
+    static let windowNeonContentInset: CGFloat = 8
     /// Main window header wildstyle wordmark height.
     static let headerWordmarkHeight: CGFloat = 38
     /// Optical vertical nudge (wordmark reads low vs square header buttons).
@@ -108,8 +108,8 @@ struct NeonWindowFrameModifier: ViewModifier {
             .overlay {
                 NeonWindowShellShape()
                     .stroke(CyberpunkTheme.neonCyan, lineWidth: 1)
-                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 7)
-                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 14)
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.65), radius: 6)
+                    .shadow(color: CyberpunkTheme.neonCyan.opacity(0.25), radius: 8)
                     .allowsHitTesting(false)
             }
             .padding(glowClearance)

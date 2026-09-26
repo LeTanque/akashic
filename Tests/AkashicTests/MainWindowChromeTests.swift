@@ -24,8 +24,12 @@ final class MainWindowChromeTests: XCTestCase {
         )
     }
 
-    func testNeonFrameInsetsWereNotShrunk() {
-        XCTAssertEqual(CyberpunkTheme.windowNeonGlowClearance, 14)
-        XCTAssertEqual(CyberpunkTheme.windowNeonContentInset, 16)
+    func testNeonFrameInsetsAreTightAndEven() {
+        XCTAssertEqual(CyberpunkTheme.windowNeonGlowClearance, 8)
+        XCTAssertEqual(CyberpunkTheme.windowNeonContentInset, 8)
+        XCTAssertEqual(
+            CyberpunkTheme.windowNeonGlowClearance,
+            CyberpunkTheme.windowNeonContentInset
+        )
     }
 }

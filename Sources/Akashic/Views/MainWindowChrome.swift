@@ -222,7 +222,7 @@ enum MainWindowTitlebarMetrics {
 }
 
 /// Hide the titlebar container and zero SwiftUI hosting safe-area so content sits
-/// flush under the neon top edge. Does not change `windowNeonGlowClearance` / inset.
+/// on the neon content inset, not an extra system titlebar band.
 enum MainWindowSystemChromeCollapser {
     static func apply(to window: NSWindow) {
         collapseTitlebarViews(in: window.contentView?.superview)
