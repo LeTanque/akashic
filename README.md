@@ -41,7 +41,9 @@ Use **Import demo seed** or **Import JSON…** in the main window only when you 
 
 ## Embedded API (FlyingFox)
 
-While Akashic is running, an in-process HTTP server listens on **localhost only** (`127.0.0.1:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
+While Akashic is running, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
+
+The main-window header (not the menu-bar popover) shows a live metrics strip: process RSS, system memory, aggregate CPU, and an ingested cloud-agent count.
 
 | Method | Path | Notes |
 |--------|------|--------|
@@ -50,17 +52,23 @@ While Akashic is running, an in-process HTTP server listens on **localhost only*
 | `POST` | `/api/todos` | Body: `{ "title", "description?", "priority?" }` → `201` |
 | `PATCH` | `/api/todos/:id` | Body may include `title`, `description`, `completed`, `priority`, `complete_by` |
 | `DELETE` | `/api/todos/:id` | `204` on success |
+| `PUT` | `/v1/agent-metrics` | Ingest `{ "activeCloudAgents", "runningCloudAgents?", "activeBots?", "updatedAt" }` |
+| `GET` | `/v1/agent-metrics` | Last ingested payload, or `404` if none yet |
 
-Todo `id` values are UUID strings.
+Todo `id` values are UUID strings. `updatedAt` is ISO-8601. The header shows `CA n` only while that payload’s `updatedAt` is younger than 60 seconds; otherwise `CA —` (a missing or stale feed is not shown as `0`).
 
 Examples:
 
 ```sh
-curl -s http://127.0.0.1:4311/health
-curl -s 'http://127.0.0.1:4311/api/todos?status=active'
-curl -s -X POST http://127.0.0.1:4311/api/todos \
+curl -s http://localhost:4311/health
+curl -s 'http://localhost:4311/api/todos?status=active'
+curl -s -X POST http://localhost:4311/api/todos \
   -H 'Content-Type: application/json' \
   -d '{"title":"Ship the README","priority":"high"}'
+curl -s -X PUT http://localhost:4311/v1/agent-metrics \
+  -H 'Content-Type: application/json' \
+  -d '{"activeCloudAgents":2,"runningCloudAgents":[{"id":"bc-example","title":"short title","status":"running"}],"activeBots":null,"updatedAt":"2026-09-26T02:31:00Z"}'
+curl -s http://localhost:4311/v1/agent-metrics
 ```
 
 If nothing answers on `:4311`, start Akashic first (the server starts with the app).

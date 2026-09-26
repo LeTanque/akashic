@@ -158,9 +158,11 @@ struct CyberHeaderStrip<Trailing: View>: View {
             ZStack {
                 AkashicHeaderWordmarkView()
                     .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    HeaderMetricsStrip()
                     trailing()
+                        .layoutPriority(1)
                 }
             }
             .frame(maxWidth: .infinity)
