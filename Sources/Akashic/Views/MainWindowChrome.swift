@@ -85,8 +85,11 @@ final class MainWindowChromeStripperView: NSView {
         window.hasShadow = true
         window.contentView?.clipsToBounds = false
         window.toolbar = nil
-        window.setAutorecalculatesContentBorderThickness(false, for: .maxY)
-        window.setContentBorderThickness(0, for: .maxY)
+        // Do not call setAutorecalculatesContentBorderThickness / setContentBorderThickness
+        // here. AppKit throws (NSApplication _crashOnException / SIGTRAP) when the window
+        // has .fullSizeContentView or a transparent titlebar with full-bleed content.
+        // Leftover titlebar space is handled by MainWindowSystemChromeCollapser and the
+        // darker top smoke veil — not content-border APIs.
 
         for kind: NSWindow.ButtonType in [.closeButton, .miniaturizeButton, .zoomButton] {
             if let button = window.standardWindowButton(kind) {
@@ -223,6 +226,9 @@ enum MainWindowTitlebarMetrics {
 
 /// Hide the titlebar container and zero SwiftUI hosting safe-area so content sits
 /// on the neon content inset, not an extra system titlebar band.
+///
+/// Must not use `setContentBorderThickness` / `setAutorecalculatesContentBorderThickness`
+/// (illegal on `.fullSizeContentView` windows; those APIs abort launch).
 enum MainWindowSystemChromeCollapser {
     static func apply(to window: NSWindow) {
         collapseTitlebarViews(in: window.contentView?.superview)
