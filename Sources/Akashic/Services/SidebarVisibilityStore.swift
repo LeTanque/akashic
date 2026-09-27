@@ -27,4 +27,8 @@ final class SidebarVisibilityStore: ObservableObject {
     var toggleMenuTitle: String {
         isVisible ? "Hide Sidebar" : "Show Sidebar"
     }
+
+    var headerTooltip: String {
+        isVisible ? "Hide sidebar (⌘⌥S)" : "Show sidebar (⌘⌥S)"
+    }
 }

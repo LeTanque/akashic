@@ -150,6 +150,48 @@ final class MainWindowChromeTests: XCTestCase {
         )
     }
 
+    func testMainWindowHeaderTogglesSidebarAndEditorFromVisibilityStores() throws {
+        let viewURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift")
+        let source = try String(contentsOf: viewURL, encoding: .utf8)
+        guard let actionsRange = source.range(of: "private var headerActions") else {
+            return XCTFail("headerActions missing")
+        }
+        let actions = String(source[actionsRange.lowerBound...].prefix(2200))
+        XCTAssertTrue(actions.contains("sidebarVisibility.toggle()"))
+        XCTAssertTrue(actions.contains("mainSectionVisibility.toggle()"))
+        XCTAssertTrue(actions.contains("sidebar.leading"))
+        XCTAssertTrue(actions.contains("sidebar.trailing"))
+        XCTAssertTrue(actions.contains("sidebarVisibility.headerTooltip"))
+        XCTAssertTrue(actions.contains("mainSectionVisibility.headerTooltip"))
+    }
+
+    func testHeaderAndMenuBarPopoverRemoveFullscreenControls() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let mainSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift"),
+            encoding: .utf8
+        )
+        let popoverSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MenuBarPopoverView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(mainSource.contains("MainWindowFullscreenTracker"))
+        XCTAssertFalse(mainSource.contains("toggleFullScreen"))
+        XCTAssertFalse(mainSource.contains("arrow.up.left.and.arrow.down.right"))
+        XCTAssertFalse(popoverSource.contains("MainWindowFullscreenTracker"))
+        XCTAssertFalse(popoverSource.contains("toggleFullScreen"))
+        XCTAssertFalse(popoverSource.contains("arrow.up.left.and.arrow.down.right"))
+        let trackerURL = root.appendingPathComponent("Sources/Akashic/Services/MainWindowFullscreenTracker.swift")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: trackerURL.path))
+    }
+
     func testChromeSourceDoesNotCallIllegalContentBorderAPIs() throws {
         let chromeURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

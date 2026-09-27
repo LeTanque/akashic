@@ -32,4 +32,12 @@ final class SidebarVisibilityStoreTests: XCTestCase {
         store.isVisible = false
         XCTAssertEqual(store.toggleMenuTitle, "Show Sidebar")
     }
+
+    func testHeaderTooltipReflectsStateAndShortcut() {
+        UserDefaults.standard.set(true, forKey: defaultsKey)
+        let store = SidebarVisibilityStore()
+        XCTAssertEqual(store.headerTooltip, "Hide sidebar (⌘⌥S)")
+        store.isVisible = false
+        XCTAssertEqual(store.headerTooltip, "Show sidebar (⌘⌥S)")
+    }
 }

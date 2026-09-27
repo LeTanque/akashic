@@ -13,7 +13,6 @@ struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
-    @EnvironmentObject private var mainWindowFullscreen: MainWindowFullscreenTracker
     @Environment(\.textZoom) private var textZoom
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
@@ -156,12 +155,21 @@ struct MainWindowView: View {
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
-                mainWindowFullscreen.toggle()
+                sidebarVisibility.toggle()
             } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                Image(systemName: "sidebar.leading")
                     .imageScale(.medium)
             }
-            .help(mainWindowFullscreen.headerTooltip)
+            .help(sidebarVisibility.headerTooltip)
+            .buttonStyle(CyberHeaderIconButtonStyle())
+
+            Button {
+                mainSectionVisibility.toggle()
+            } label: {
+                Image(systemName: "sidebar.trailing")
+                    .imageScale(.medium)
+            }
+            .help(mainSectionVisibility.headerTooltip)
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {

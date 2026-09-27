@@ -27,4 +27,8 @@ final class MainSectionVisibilityStore: ObservableObject {
     var toggleMenuTitle: String {
         isVisible ? "Hide Editor" : "Show Editor"
     }
+
+    var headerTooltip: String {
+        isVisible ? "Hide editor (⌘⌥E)" : "Show editor (⌘⌥E)"
+    }
 }

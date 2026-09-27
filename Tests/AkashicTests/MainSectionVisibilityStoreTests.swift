@@ -32,4 +32,12 @@ final class MainSectionVisibilityStoreTests: XCTestCase {
         store.isVisible = false
         XCTAssertEqual(store.toggleMenuTitle, "Show Editor")
     }
+
+    func testHeaderTooltipReflectsStateAndShortcut() {
+        UserDefaults.standard.set(true, forKey: defaultsKey)
+        let store = MainSectionVisibilityStore()
+        XCTAssertEqual(store.headerTooltip, "Hide editor (⌘⌥E)")
+        store.isVisible = false
+        XCTAssertEqual(store.headerTooltip, "Show editor (⌘⌥E)")
+    }
 }
