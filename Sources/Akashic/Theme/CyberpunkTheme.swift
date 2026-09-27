@@ -255,7 +255,7 @@ private struct CyberBorderedButtonBody: View {
     }
 }
 
-/// Fixed square chrome for header icon buttons (Add, sidebar toggles, close).
+/// Fixed square chrome for header icon buttons (Add, sidebar toggles).
 struct CyberHeaderIconButtonStyle: ButtonStyle {
     static let size: CGFloat = 28
 

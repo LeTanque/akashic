@@ -13,7 +13,6 @@ struct MainWindowView: View {
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
     @Environment(\.textZoom) private var textZoom
-    @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
 
     private var filteredTodos: [TodoItem] {
@@ -151,14 +150,6 @@ struct MainWindowView: View {
                     .imageScale(.medium)
             }
             .help(mainSectionVisibility.headerTooltip)
-            .buttonStyle(CyberHeaderIconButtonStyle())
-
-            Button {
-                dismissWindow(id: "main")
-            } label: {
-                Text("×")
-            }
-            .help("Close main window")
             .buttonStyle(CyberHeaderIconButtonStyle())
         }
     }

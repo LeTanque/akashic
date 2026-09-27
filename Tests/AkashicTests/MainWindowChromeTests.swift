@@ -186,6 +186,21 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertFalse(actions.contains("doc.badge.arrow.up"))
     }
 
+    func testMainWindowHeaderHasNoCloseButton() throws {
+        let viewURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift")
+        let source = try String(contentsOf: viewURL, encoding: .utf8)
+        guard let actionsRange = source.range(of: "private var headerActions") else {
+            return XCTFail("headerActions missing")
+        }
+        let actions = String(source[actionsRange.lowerBound...].prefix(900))
+        XCTAssertFalse(actions.contains("dismissWindow"))
+        XCTAssertFalse(actions.contains("Close main window"))
+    }
+
     func testMenuBarMenuOffersDestructiveImportsWithConfirmation() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
