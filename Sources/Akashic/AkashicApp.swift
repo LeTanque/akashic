@@ -6,6 +6,7 @@ struct AkashicApp: App {
     @StateObject private var store = TodoStore()
     @StateObject private var textZoom = TextZoomStore()
     @StateObject private var sidebarVisibility = SidebarVisibilityStore()
+    @StateObject private var mainSectionVisibility = MainSectionVisibilityStore()
     @NSApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -14,6 +15,7 @@ struct AkashicApp: App {
                 .environmentObject(store)
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
+                .environmentObject(mainSectionVisibility)
                 .akashicTextZoom(textZoom)
                 .background(LaunchOpenMainWindow())
         }
@@ -25,6 +27,7 @@ struct AkashicApp: App {
                 .environmentObject(store)
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
+                .environmentObject(mainSectionVisibility)
                 .akashicTextZoom(textZoom)
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
@@ -53,6 +56,11 @@ struct AkashicApp: App {
                 sidebarVisibility.toggle()
             }
             .keyboardShortcut("s", modifiers: [.command, .option])
+
+            Button(mainSectionVisibility.toggleMenuTitle) {
+                mainSectionVisibility.toggle()
+            }
+            .keyboardShortcut("e", modifiers: [.command, .option])
 
             Divider()
 
