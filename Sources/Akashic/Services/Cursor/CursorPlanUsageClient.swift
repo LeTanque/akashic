@@ -36,7 +36,7 @@ enum CursorPlanUsageClient {
 
         var includedRemaining: Double?
         if let limit, limit > 0 {
-            includedRemaining = includedRemaining(
+            includedRemaining = Self.includedRemaining(
                 limit: limit,
                 includedSpend: included,
                 apiRemaining: remaining
