@@ -258,7 +258,7 @@ private struct MatrixRainCanvas: View {
     }
 }
 
-struct MatrixRainLayout {
+private struct MatrixRainLayout {
     let canvasSize: CGSize
     let columns: Int
     let rows: Int
