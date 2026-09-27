@@ -24,7 +24,7 @@ struct MatrixDigitalRainView: View {
     }
 }
 
-enum MatrixRainStyle {
+private enum MatrixRainStyle {
     static let background = Color(red: 0.01, green: 0.03, blue: 0.015)
     static let matrixGreen = Color(red: 0, green: 1, blue: 65 / 255)
     static let dimGlyph = Color(red: 0, green: 0.12, blue: 0.04)
@@ -102,11 +102,7 @@ private final class MatrixGlyphAtlas {
         context.translateBy(x: 0, y: CGFloat(pixelHeight))
         context.scaleBy(x: 1, y: -1)
 
-        let font = CTFontCreateWithName(
-            ".AppleSystemUIFontMonospaced" as CFString,
-            MatrixRainStyle.fontSize * 2,
-            nil
-        )
+        let font = CTFontCreateWithName("Menlo" as CFString, MatrixRainStyle.fontSize * 2, nil)
         let attributes: [CFString: Any] = [
             kCTFontAttributeName: font,
             kCTForegroundColorAttributeName: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
@@ -210,7 +206,12 @@ private struct MatrixRainCanvas: View {
 
                 for column in 0 ..< layout.columns {
                     let headRow = layout.headRow(forColumn: column, time: effectiveTime)
-                    for row in 0 ..< layout.rows {
+                    let lastRow = min(layout.rows - 1, Int(floor(headRow)))
+                    var firstRow = Int(floor(headRow - MatrixRainStyle.trailLength)) + 1
+                    if firstRow < 0 { firstRow = 0 }
+                    guard firstRow <= lastRow else { continue }
+
+                    for row in firstRow ... lastRow {
                         let delta = headRow - Double(row)
                         let intensity = layout.trailIntensity(delta: delta)
                         guard intensity > 0.001 else { continue }
