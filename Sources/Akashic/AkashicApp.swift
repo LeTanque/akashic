@@ -11,15 +11,12 @@ struct AkashicApp: App {
 
     var body: some Scene {
         MenuBarExtra("Akashic", systemImage: "sparkles") {
-            MenuBarPopoverView()
+            MenuBarMenuView()
                 .environmentObject(store)
-                .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
-                .akashicTextZoom(textZoom)
-                .background(LaunchOpenMainWindow())
         }
-        .menuBarExtraStyle(.window)
+        .menuBarExtraStyle(.menu)
         .commands { viewCommands }
 
         Window("Akashic", id: "main") {
@@ -29,6 +26,7 @@ struct AkashicApp: App {
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
                 .akashicTextZoom(textZoom)
+                .background(LaunchOpenMainWindow())
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -76,7 +74,7 @@ struct AkashicApp: App {
     }
 }
 
-/// Lives in MenuBarExtra so openWindow is available even before the Window scene mounts.
+/// Ensures `openWindow` runs for launch/reopen notifications once the main window scene is mounted.
 private struct LaunchOpenMainWindow: View {
     @Environment(\.openWindow) private var openWindow
     @State private var didOpen = false

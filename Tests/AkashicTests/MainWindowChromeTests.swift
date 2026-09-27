@@ -169,7 +169,7 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertTrue(actions.contains("mainSectionVisibility.headerTooltip"))
     }
 
-    func testHeaderAndMenuBarPopoverRemoveFullscreenControls() throws {
+    func testHeaderAndMenuBarMenuRemoveFullscreenControls() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -178,18 +178,55 @@ final class MainWindowChromeTests: XCTestCase {
             contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift"),
             encoding: .utf8
         )
-        let popoverSource = try String(
-            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MenuBarPopoverView.swift"),
+        let menuSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MenuBarMenuView.swift"),
             encoding: .utf8
         )
         XCTAssertFalse(mainSource.contains("MainWindowFullscreenTracker"))
         XCTAssertFalse(mainSource.contains("toggleFullScreen"))
         XCTAssertFalse(mainSource.contains("arrow.up.left.and.arrow.down.right"))
-        XCTAssertFalse(popoverSource.contains("MainWindowFullscreenTracker"))
-        XCTAssertFalse(popoverSource.contains("toggleFullScreen"))
-        XCTAssertFalse(popoverSource.contains("arrow.up.left.and.arrow.down.right"))
+        XCTAssertFalse(menuSource.contains("MainWindowFullscreenTracker"))
+        XCTAssertFalse(menuSource.contains("toggleFullScreen"))
+        XCTAssertFalse(menuSource.contains("arrow.up.left.and.arrow.down.right"))
         let trackerURL = root.appendingPathComponent("Sources/Akashic/Services/MainWindowFullscreenTracker.swift")
         XCTAssertFalse(FileManager.default.fileExists(atPath: trackerURL.path))
+    }
+
+    /// Status item must use the system menu, not the Akashic-themed popover panel.
+    func testMenuBarExtraUsesStandardSystemMenu() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/AkashicApp.swift"),
+            encoding: .utf8
+        )
+        let menuSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MenuBarMenuView.swift"),
+            encoding: .utf8
+        )
+        let chromeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MainWindowChrome.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(appSource.contains(".menuBarExtraStyle(.menu)"))
+        XCTAssertFalse(appSource.contains(".menuBarExtraStyle(.window)"))
+        XCTAssertTrue(appSource.contains("MenuBarMenuView()"))
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent("Sources/Akashic/Views/MenuBarPopoverView.swift").path
+            )
+        )
+        XCTAssertFalse(menuSource.contains("CyberpunkTheme"))
+        XCTAssertFalse(menuSource.contains("SmokedGlassFill"))
+        XCTAssertFalse(menuSource.contains("PopoverWindowTranslucencyConfigurator"))
+        XCTAssertFalse(menuSource.contains("CyberBorderedButtonStyle"))
+        XCTAssertFalse(menuSource.contains("TodoListContent"))
+        XCTAssertFalse(chromeSource.contains("PopoverWindowTranslucencyConfigurator"))
+        XCTAssertTrue(menuSource.contains("sidebarVisibility.toggleMenuTitle"))
+        XCTAssertTrue(menuSource.contains("mainSectionVisibility.toggleMenuTitle"))
+        XCTAssertTrue(menuSource.contains("Quit Akashic"))
     }
 
     func testChromeSourceDoesNotCallIllegalContentBorderAPIs() throws {
