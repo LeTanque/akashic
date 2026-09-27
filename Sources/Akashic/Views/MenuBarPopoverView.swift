@@ -4,7 +4,6 @@ struct MenuBarPopoverView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
-    @EnvironmentObject private var mainWindowFullscreen: MainWindowFullscreenTracker
     @Environment(\.openWindow) private var openWindow
     @Environment(\.textZoom) private var textZoom
 
@@ -100,18 +99,6 @@ struct MenuBarPopoverView: View {
                 }
                 .buttonStyle(CyberBorderedButtonStyle())
                 .help("Toggle main window editor (⌘⌥E)")
-
-                Button {
-                    mainWindowFullscreen.toggle()
-                    openWindow(id: "main")
-                } label: {
-                    Label(
-                        mainWindowFullscreen.toggleMenuTitle,
-                        systemImage: "arrow.up.left.and.arrow.down.right"
-                    )
-                }
-                .buttonStyle(CyberBorderedButtonStyle())
-                .help("Toggle main window full screen (⌃⌘F)")
 
                 Spacer()
             }
