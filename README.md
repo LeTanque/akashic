@@ -37,7 +37,7 @@ Do **not** commit that file, exports of personal todos, or dumps named like `see
 
 On **first launch with an empty database**, Akashic imports the bundled **demo** seed (`Sources/Akashic/Resources/akashic-seed-todos.json`). That seed is sample content only — replace it with your own local list in Application Support; never put personal todos in the bundled seed.
 
-Use **Import demo seed** or **Import JSON…** in the main window only when you intentionally want to load sample or your own exported JSON into the local DB.
+Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar menu only when you intentionally want to load sample or your own exported JSON into the local DB. Both actions ask for confirmation because they replace your current todos.
 
 ## Embedded API (FlyingFox)
 

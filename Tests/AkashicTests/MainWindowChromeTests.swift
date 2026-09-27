@@ -169,6 +169,44 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertTrue(actions.contains("mainSectionVisibility.headerTooltip"))
     }
 
+    func testMainWindowHeaderHasNoImportControls() throws {
+        let viewURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift")
+        let source = try String(contentsOf: viewURL, encoding: .utf8)
+        guard let actionsRange = source.range(of: "private var headerActions") else {
+            return XCTFail("headerActions missing")
+        }
+        let actions = String(source[actionsRange.lowerBound...].prefix(1200))
+        XCTAssertFalse(actions.contains("importSeedFromBundle"))
+        XCTAssertFalse(actions.contains("importFromFile"))
+        XCTAssertFalse(actions.contains("square.and.arrow.down"))
+        XCTAssertFalse(actions.contains("doc.badge.arrow.up"))
+    }
+
+    func testMenuBarMenuOffersDestructiveImportsWithConfirmation() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let menuSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MenuBarMenuView.swift"),
+            encoding: .utf8
+        )
+        let confirmSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Services/AkashicImportConfirmations.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(menuSource.contains("Import Demo Seed"))
+        XCTAssertTrue(menuSource.contains("Import JSON"))
+        XCTAssertTrue(menuSource.contains("AkashicImportConfirmations.confirmReplaceWithBundledSeed()"))
+        XCTAssertTrue(menuSource.contains("AkashicImportConfirmations.confirmReplaceWithJSONFile()"))
+        XCTAssertTrue(confirmSource.contains("Replace all todos?"))
+        XCTAssertTrue(confirmSource.contains("alertStyle = .warning"))
+    }
+
     func testHeaderAndMenuBarMenuRemoveFullscreenControls() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

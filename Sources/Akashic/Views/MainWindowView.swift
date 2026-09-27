@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 private enum TodoListFilter: String, CaseIterable, Identifiable {
     case all = "All"
@@ -137,24 +136,6 @@ struct MainWindowView: View {
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
-                store.importSeedFromBundle(replaceExisting: true)
-            } label: {
-                Image(systemName: "square.and.arrow.down")
-                    .imageScale(.medium)
-            }
-            .help("Import bundled demo seed (replace existing todos)")
-            .buttonStyle(CyberHeaderIconButtonStyle())
-
-            Button {
-                importFromFile()
-            } label: {
-                Image(systemName: "doc.badge.arrow.up")
-                    .imageScale(.medium)
-            }
-            .help("Import todos from JSON file…")
-            .buttonStyle(CyberHeaderIconButtonStyle())
-
-            Button {
                 sidebarVisibility.toggle()
             } label: {
                 Image(systemName: "sidebar.leading")
@@ -204,15 +185,5 @@ struct MainWindowView: View {
                 .fill(CyberpunkTheme.rowDivider)
                 .frame(height: 1)
         }
-    }
-
-    private func importFromFile() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.json]
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.message = "Import seed JSON"
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        store.importSeedFromFile(url: url)
     }
 }

@@ -73,7 +73,7 @@ final class LiveMetricsTests: XCTestCase {
 
     func testCursorQuotaPercentParsing() {
         XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(21.4), 21.4)
-        XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(0.21), 21, accuracy: 0.001)
+        XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(0.21)!, 21, accuracy: 0.001)
         XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(1), 100)
         XCTAssertNil(CursorDashboardQuotaClient.percentUsed(nil))
     }
