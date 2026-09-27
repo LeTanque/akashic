@@ -43,7 +43,9 @@ Use **Import demo seed** or **Import JSON…** in the main window only when you 
 
 While Akashic is running, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
 
-The main-window **top header chrome** (`CyberHeaderStrip`) is three independent alignments: a live two-row metrics strip **flush left** (APP + SYS over CPU + CA), the Akashic wordmark **centered in the window**, and +/import/close **flush right**. Both metric rows stay visible — the strip does not drop SYS or CPU when the header is tight. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
+The main-window **top header chrome** (`CyberHeaderStrip`) is three independent alignments: a live three-row metrics strip **flush left** (DISK + SYS, then CPU + CA + optional BOT, then **CM** / **OM** Cursor quota percents), the Akashic wordmark **centered in the window**, and +/import/close **flush right**. Host and agent rows stay visible — the strip does not drop SYS or CPU when the header is tight. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
+
+**Cursor quota (CM / OM)** mirrors the Cursor **Plan & Usage** dashboard: percent **used** for Cursor Models and Other Models. Akashic reads the IDE session from `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`, then calls the unofficial `GET https://cursor.com/api/usage-summary` with a `WorkosCursorSessionToken` cookie (same approach as [MetricsWidget](https://github.com/LeTanque/metric-widget)). If that endpoint fails, it falls back to `autoPercentUsed` / `apiPercentUsed` on `GetCurrentPeriodUsage`. Without a signed-in Cursor session the HUD shows `CM —` / `OM —`. Quota refreshes about every two minutes (not on the 1 Hz host sampler).
 
 | Method | Path | Notes |
 |--------|------|--------|
