@@ -30,12 +30,12 @@ final class MainWindowChromeTests: XCTestCase {
     }
 
     func testHeaderStripIsTightAroundWordmarkRow() {
-        XCTAssertEqual(CyberpunkTheme.headerWordmarkHeight, 38)
+        XCTAssertEqual(CyberpunkTheme.headerWordmarkHeight, 48)
         XCTAssertEqual(CyberpunkTheme.headerStripVerticalPadding, 4)
         XCTAssertLessThan(
             CyberpunkTheme.headerStripVerticalPadding * 2,
             CyberpunkTheme.headerWordmarkHeight,
-            "Vertical pad should stay modest relative to the 38pt wordmark"
+            "Vertical pad should stay modest relative to the wordmark height"
         )
         XCTAssertEqual(CyberpunkTheme.headerStripLeadingPadding, 0)
         XCTAssertEqual(CyberpunkTheme.headerStripTrailingPadding, 0)
@@ -93,9 +93,9 @@ final class MainWindowChromeTests: XCTestCase {
         )
     }
 
-    /// The main-window HUD must always render APP/SYS + CPU/CA. ViewThatFits
-    /// falling back to short (APP+CA) or minimal (APP) is the PR #10 bug.
-    func testHeaderMetricsStripAlwaysShowsFullTwoRows() throws {
+    /// The main-window HUD must always render DISK/SYS + CPU/CA + CM/OM. ViewThatFits
+    /// falling back to short rows is the PR #10 bug.
+    func testHeaderMetricsStripAlwaysShowsFullRows() throws {
         let stripURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -104,7 +104,7 @@ final class MainWindowChromeTests: XCTestCase {
         let source = try String(contentsOf: stripURL, encoding: .utf8)
         XCTAssertTrue(
             source.contains("stacked(lines.full)"),
-            "Header metrics must render the full APP/SYS + CPU/CA rows"
+            "Header metrics must render the full DISK/SYS + CPU/CA + quota rows"
         )
         XCTAssertFalse(
             source.contains("ViewThatFits("),

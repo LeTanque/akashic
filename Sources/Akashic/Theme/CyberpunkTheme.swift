@@ -29,8 +29,8 @@ enum CyberpunkTheme {
     static let windowTopChromeVeilOpacity: Double = 0.45
     /// Typical ~28pt titlebar plus the 16pt content inset, fading into the header.
     static let windowTopChromeVeilHeight: CGFloat = 52
-    /// Main window header wildstyle wordmark height.
-    static let headerWordmarkHeight: CGFloat = 38
+    /// Main window header wildstyle wordmark height (tall enough for three metric rows beside it).
+    static let headerWordmarkHeight: CGFloat = 48
     /// Optical vertical nudge (wordmark reads low vs square header buttons).
     static let headerWordmarkVerticalOffset: CGFloat = -3
     /// Tight pad above/below the wordmark–metrics–buttons row (not a tall empty band).

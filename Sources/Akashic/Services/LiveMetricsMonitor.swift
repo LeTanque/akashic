@@ -2,7 +2,7 @@ import Combine
 import Darwin
 import Foundation
 
-/// Process RSS, host memory, and aggregate CPU sampled about once a second.
+/// Free disk on the home volume, host memory, and aggregate CPU sampled about once a second.
 @MainActor
 final class LiveMetricsMonitor: ObservableObject {
     @Published private(set) var snapshot = LiveMetricsSnapshot()
@@ -31,8 +31,8 @@ final class LiveMetricsMonitor: ObservableObject {
 
     func sample() {
         var next = snapshot
-        if let rss = MachHostMetrics.appResidentBytes() {
-            next.appRSS = rss
+        if let free = MachHostMetrics.systemFreeBytes() {
+            next.diskFree = free
         }
         if let sys = MachHostMetrics.systemMemory() {
             next.sysUsed = sys.used
@@ -49,7 +49,8 @@ final class LiveMetricsMonitor: ObservableObject {
 }
 
 struct LiveMetricsSnapshot: Equatable, Sendable {
-    var appRSS: UInt64 = 0
+    /// Free space on `MachHostMetrics.freeSpaceVolumePath` (home/Data volume).
+    var diskFree: UInt64 = 0
     var sysUsed: UInt64 = 0
     var sysTotal: UInt64 = 0
     /// Machine-wide 0–100 once two tick samples exist; `nil` until then.
@@ -95,34 +96,36 @@ enum CompactBytes {
 
 enum MetricsStripText {
     static let separator = "  ·  "
-    /// Same four metrics; only the gutter between labels shrinks.
+    /// Same metrics; only the gutter between labels shrinks.
     static let tightSeparator = " · "
     static let empty = "—"
 
-    /// Two stacked header rows. `top` / `bottom` are left-aligned HUD lines.
+    /// Stacked header rows (`top` / `middle` / `quota`). Left-aligned HUD lines.
     struct Rows: Equatable {
         var top: String
-        var bottom: String
+        var middle: String
+        var quota: String
     }
 
     struct Lines: Equatable {
-        /// APP + SYS / CPU + CA (+ BOT on the second row when present).
+        /// DISK + SYS / CPU + CA (+ BOT) / CM + OM quota row.
         var full: Rows
-        /// Same four metrics with a tighter separator — never drops SYS or CPU.
         var tight: Rows
-        /// Single spoken line for accessibility.
+        /// Single spoken line for accessibility (full quota names).
         var spoken: String
     }
 
     static func make(
-        appRSS: UInt64,
+        diskFree: UInt64,
         sysUsed: UInt64,
         sysTotal: UInt64,
         cpuPercent: Double?,
         cloudAgents: Int?,
-        bots: Int?
+        bots: Int?,
+        cursorModelsUsedPercent: Double?,
+        otherModelsUsedPercent: Double?
     ) -> Lines {
-        let app = "APP \(CompactBytes.format(appRSS))"
+        let disk = "DISK \(CompactBytes.format(diskFree))"
         let sys = "SYS \(CompactBytes.usedOverTotal(used: sysUsed, total: sysTotal))"
         let cpu: String = {
             if let cpuPercent {
@@ -147,32 +150,54 @@ enum MetricsStripText {
             row2.append(bot)
         }
 
-        let spokenParts = [app, sys, cpu, ca] + (bot.map { [$0] } ?? [])
+        let cm = quotaCell(short: "CM", fullName: "Cursor Models", percentUsed: cursorModelsUsedPercent)
+        let om = quotaCell(short: "OM", fullName: "Other Models", percentUsed: otherModelsUsedPercent)
+        let quotaRow = join([cm.display, om.display])
+        let quotaSpoken = [cm.spoken, om.spoken].joined(separator: separator)
+
+        let spokenParts = [disk, sys] + row2 + [quotaSpoken]
 
         return Lines(
-            full: Rows(top: join([app, sys]), bottom: join(row2)),
+            full: Rows(
+                top: join([disk, sys]),
+                middle: join(row2),
+                quota: quotaRow
+            ),
             tight: Rows(
-                top: join([app, sys], separator: tightSeparator),
-                bottom: join(row2, separator: tightSeparator)
+                top: join([disk, sys], separator: tightSeparator),
+                middle: join(row2, separator: tightSeparator),
+                quota: join([cm.display, om.display], separator: tightSeparator)
             ),
             spoken: join(spokenParts)
+        )
+    }
+
+    private struct QuotaCell {
+        var display: String
+        var spoken: String
+    }
+
+    private static func quotaCell(short: String, fullName: String, percentUsed: Double?) -> QuotaCell {
+        guard let percentUsed else {
+            return QuotaCell(display: "\(short) \(empty)", spoken: "\(fullName) unavailable")
+        }
+        let rounded = Int(percentUsed.rounded())
+        return QuotaCell(
+            display: "\(short) \(rounded)%",
+            spoken: "\(fullName) \(rounded) percent used"
         )
     }
 }
 
 enum MachHostMetrics {
-    static func appResidentBytes() -> UInt64? {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(
-            MemoryLayout<mach_task_basic_info_data_t>.size / MemoryLayout<natural_t>.size
-        )
-        let result = withUnsafeMutablePointer(to: &info) { pointer in
-            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
-            }
-        }
-        guard result == KERN_SUCCESS else { return nil }
-        return UInt64(info.resident_size)
+    /// Volume whose free space the header HUD shows (typically the macOS Data volume).
+    static let freeSpaceVolumePath = FileManager.default.homeDirectoryForCurrentUser.path
+
+    static func systemFreeBytes() -> UInt64? {
+        guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: freeSpaceVolumePath),
+              let free = attrs[.systemFreeSize] as? NSNumber
+        else { return nil }
+        return free.uint64Value
     }
 
     static func systemMemory() -> (used: UInt64, total: UInt64)? {

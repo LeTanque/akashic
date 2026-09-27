@@ -25,37 +25,63 @@ final class LiveMetricsTests: XCTestCase {
 
     func testStripTextMatchesHeaderPattern() {
         let lines = MetricsStripText.make(
-            appRSS: 42 * 1024 * 1024,
+            diskFree: 412 * 1024 * 1024 * 1024,
             sysUsed: 18 * 1024 * 1024 * 1024,
             sysTotal: 36 * 1024 * 1024 * 1024,
             cpuPercent: 23.4,
             cloudAgents: 2,
-            bots: nil
+            bots: nil,
+            cursorModelsUsedPercent: 21,
+            otherModelsUsedPercent: 7
         )
-        XCTAssertEqual(lines.full.top, "APP 42M  ·  SYS 18/36G")
-        XCTAssertEqual(lines.full.bottom, "CPU 23%  ·  CA 2")
-        XCTAssertEqual(lines.tight.top, "APP 42M · SYS 18/36G")
-        XCTAssertEqual(lines.tight.bottom, "CPU 23% · CA 2")
-        XCTAssertEqual(lines.spoken, "APP 42M  ·  SYS 18/36G  ·  CPU 23%  ·  CA 2")
-        // Tightening the gutter is allowed; dropping SYS or CPU is not.
+        XCTAssertEqual(lines.full.top, "DISK 412G  ·  SYS 18/36G")
+        XCTAssertEqual(lines.full.middle, "CPU 23%  ·  CA 2")
+        XCTAssertEqual(lines.full.quota, "CM 21%  ·  OM 7%")
+        XCTAssertEqual(lines.tight.top, "DISK 412G · SYS 18/36G")
+        XCTAssertEqual(lines.tight.middle, "CPU 23% · CA 2")
+        XCTAssertEqual(lines.tight.quota, "CM 21% · OM 7%")
+        XCTAssertTrue(lines.spoken.contains("Cursor Models 21 percent used"))
+        XCTAssertTrue(lines.spoken.contains("Other Models 7 percent used"))
         XCTAssertTrue(lines.tight.top.contains("SYS"))
-        XCTAssertTrue(lines.tight.bottom.contains("CPU"))
+        XCTAssertTrue(lines.tight.middle.contains("CPU"))
     }
 
     func testStripTextEmptyStatesAndOptionalBot() {
         let lines = MetricsStripText.make(
-            appRSS: 8 * 1024 * 1024,
+            diskFree: 128 * 1024 * 1024 * 1024,
             sysUsed: 4 * 1024 * 1024 * 1024,
             sysTotal: 8 * 1024 * 1024 * 1024,
             cpuPercent: nil,
             cloudAgents: nil,
-            bots: 1
+            bots: 1,
+            cursorModelsUsedPercent: nil,
+            otherModelsUsedPercent: nil
         )
-        XCTAssertEqual(lines.full.top, "APP 8M  ·  SYS 4/8G")
-        XCTAssertEqual(lines.full.bottom, "CPU —  ·  CA —  ·  BOT 1")
-        XCTAssertEqual(lines.tight.top, "APP 8M · SYS 4/8G")
-        XCTAssertEqual(lines.tight.bottom, "CPU — · CA — · BOT 1")
-        XCTAssertEqual(lines.spoken, "APP 8M  ·  SYS 4/8G  ·  CPU —  ·  CA —  ·  BOT 1")
+        XCTAssertEqual(lines.full.top, "DISK 128G  ·  SYS 4/8G")
+        XCTAssertEqual(lines.full.middle, "CPU —  ·  CA —  ·  BOT 1")
+        XCTAssertEqual(lines.full.quota, "CM —  ·  OM —")
+        XCTAssertTrue(lines.spoken.contains("Cursor Models unavailable"))
+    }
+
+    func testCursorQuotaPercentParsing() {
+        XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(21.4), 21.4)
+        XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(0.21), 21, accuracy: 0.001)
+        XCTAssertEqual(CursorDashboardQuotaClient.percentUsed(1), 100)
+        XCTAssertNil(CursorDashboardQuotaClient.percentUsed(nil))
+    }
+
+    func testCursorSessionAuthExtractsUserIDFromJWT() {
+        func base64URL(_ json: String) -> String {
+            Data(json.utf8).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        let piped = base64URL(#"{"sub":"prefix|myUserId|suffix"}"#)
+        XCTAssertEqual(CursorSessionAuth.userID(fromJWT: "hdr.\(piped).sig"), "myUserId")
+
+        let solo = base64URL(#"{"sub":"user_only"}"#)
+        XCTAssertEqual(CursorSessionAuth.userID(fromJWT: "hdr.\(solo).sig"), "user_only")
     }
 
     func testParseAgentMetricsSamplePayload() throws {
@@ -114,7 +140,6 @@ final class LiveMetricsTests: XCTestCase {
         XCTAssertNil(store.displayedCloudAgentCount(at: now))
         XCTAssertNil(store.displayedBotCount(at: now))
 
-        // 5-minute Grok Bot interval is still inside the ~7-minute window.
         store.replace(
             AgentMetricsPayload(
                 activeCloudAgents: 2,
@@ -144,7 +169,6 @@ final class LiveMetricsTests: XCTestCase {
     func testCPUDeltaIsMachineWidePercent() {
         let previous = HostCPUTicks(user: 100, system: 50, idle: 850, nice: 0)
         let current = HostCPUTicks(user: 180, system: 70, idle: 950, nice: 0)
-        // busy +100, total +200 → 50%
         XCTAssertEqual(current.usagePercent(since: previous), 50)
     }
 }
