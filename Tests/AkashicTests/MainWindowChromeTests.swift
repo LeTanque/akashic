@@ -119,6 +119,37 @@ final class MainWindowChromeTests: XCTestCase {
     /// AppKit throws (SIGTRAP via `+[NSApplication _crashOnException:]`) if these
     /// are called on a `.fullSizeContentView` window. Scan the chrome source so
     /// a later titlebar tweak cannot restore the launch crash from PR #7.
+    /// When the editor is hidden but the todo list stays visible, the list column must
+    /// expand like the detail column does when the sidebar is hidden (not stay capped at 420pt).
+    func testMainWindowExpandsTodoListWhenEditorHidden() throws {
+        let viewURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift")
+        let source = try String(contentsOf: viewURL, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("sidebarExpandsToFill"),
+            "Main window must detect editor-hidden + sidebar-visible layout"
+        )
+        guard let expandsRange = source.range(of: "sidebarExpandsToFill") else {
+            return XCTFail("sidebarExpandsToFill missing")
+        }
+        let afterExpands = String(source[expandsRange.lowerBound...])
+        guard let todoRange = afterExpands.range(of: "private var todoListColumn") else {
+            return XCTFail("todoListColumn missing")
+        }
+        let todoBlock = String(afterExpands[todoRange.lowerBound...].prefix(800))
+        XCTAssertTrue(
+            todoBlock.contains("if sidebarExpandsToFill"),
+            "Todo list frame must branch when the editor is hidden"
+        )
+        XCTAssertTrue(
+            todoBlock.contains("maxWidth: .infinity, maxHeight: .infinity"),
+            "Expanded todo list must fill the content area"
+        )
+    }
+
     func testChromeSourceDoesNotCallIllegalContentBorderAPIs() throws {
         let chromeURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
