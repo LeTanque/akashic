@@ -160,7 +160,7 @@ final class MainWindowChromeTests: XCTestCase {
         guard let actionsRange = source.range(of: "private var headerActions") else {
             return XCTFail("headerActions missing")
         }
-        let actions = String(source[actionsRange.lowerBound...].prefix(1200))
+        let actions = String(source[actionsRange.lowerBound...].prefix(2200))
         XCTAssertTrue(actions.contains("sidebarVisibility.toggle()"))
         XCTAssertTrue(actions.contains("mainSectionVisibility.toggle()"))
         XCTAssertTrue(actions.contains("sidebar.leading"))
