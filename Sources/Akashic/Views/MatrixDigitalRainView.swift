@@ -24,7 +24,7 @@ struct MatrixDigitalRainView: View {
     }
 }
 
-private enum MatrixRainStyle {
+enum MatrixRainStyle {
     static let background = Color(red: 0.01, green: 0.03, blue: 0.015)
     static let matrixGreen = Color(red: 0, green: 1, blue: 65 / 255)
     static let dimGlyph = Color(red: 0, green: 0.12, blue: 0.04)
@@ -49,7 +49,7 @@ private enum MatrixRainStyle {
 
 // MARK: - Glyph atlas (one-time text rasterization, fast per-frame mask fills)
 
-private final class MatrixGlyphAtlas {
+final class MatrixGlyphAtlas {
     static let shared = MatrixGlyphAtlas()
 
     let cellWidth: CGFloat
@@ -57,10 +57,12 @@ private final class MatrixGlyphAtlas {
     private let masks: [CGImage]
 
     private init() {
-        cellWidth = MatrixRainStyle.columnWidth
-        cellHeight = MatrixRainStyle.rowHeight
+        let width = MatrixRainStyle.columnWidth
+        let height = MatrixRainStyle.rowHeight
+        cellWidth = width
+        cellHeight = height
         masks = MatrixRainStyle.glyphPool.map { character in
-            Self.renderMask(for: character, cellWidth: cellWidth, cellHeight: cellHeight)
+            MatrixGlyphAtlas.renderMask(for: character, cellWidth: width, cellHeight: height)
         }
     }
 
@@ -107,10 +109,10 @@ private final class MatrixGlyphAtlas {
             kCTFontAttributeName: font,
             kCTForegroundColorAttributeName: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
         ]
-        let attributed = CFAttributedStringCreate(nil, String(character) as CFString, attributes as CFDictionary)
-        guard let attributed, let line = CTLineCreateWithAttributedString(attributed) else {
+        guard let attributed = CFAttributedStringCreate(nil, String(character) as CFString, attributes as CFDictionary) else {
             return context.makeImage() ?? emptyMask(width: pixelWidth, height: pixelHeight)
         }
+        let line = CTLineCreateWithAttributedString(attributed)
 
         var ascent: CGFloat = 0
         var descent: CGFloat = 0
@@ -258,7 +260,7 @@ private struct MatrixRainCanvas: View {
     }
 }
 
-private struct MatrixRainLayout {
+struct MatrixRainLayout {
     let canvasSize: CGSize
     let columns: Int
     let rows: Int
