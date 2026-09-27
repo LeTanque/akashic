@@ -41,14 +41,14 @@ final class LiveMetricsTests: XCTestCase {
             cursorBonusSpendUSD: nil,
             cursorModelsUsedPercent: 21,
             otherModelsUsedPercent: 7,
-            grokBotUsedPercent: 12
+            grokBotRemainingPercent: 88
         )
         XCTAssertEqual(lines.full.top, "DISK 64/392G  ·  SYS 18/36G  ·  CPU 23%")
-        XCTAssertEqual(lines.full.bottom, "$43  ·  CM 21%  ·  OM 7%  ·  BOT 12%")
+        XCTAssertEqual(lines.full.bottom, "$43  ·  CM 21%  ·  OM 7%  ·  BOT 88%")
         XCTAssertEqual(lines.tight.top, "DISK 64/392G · SYS 18/36G · CPU 23%")
-        XCTAssertEqual(lines.tight.bottom, "$43 · CM 21% · OM 7% · BOT 12%")
+        XCTAssertEqual(lines.tight.bottom, "$43 · CM 21% · OM 7% · BOT 88%")
         XCTAssertTrue(lines.spoken.contains("Cursor Models 21 percent used"))
-        XCTAssertTrue(lines.spoken.contains("Grok Bot weekly 12 percent used"))
+        XCTAssertTrue(lines.spoken.contains("Grok Bot weekly 88 percent remaining"))
         XCTAssertTrue(lines.spoken.contains("$43 included spend remaining"))
     }
 
@@ -63,7 +63,7 @@ final class LiveMetricsTests: XCTestCase {
             cursorBonusSpendUSD: 5.25,
             cursorModelsUsedPercent: nil,
             otherModelsUsedPercent: nil,
-            grokBotUsedPercent: nil
+            grokBotRemainingPercent: nil
         )
         XCTAssertEqual(lines.full.top, "DISK 128/800G  ·  SYS 4/8G  ·  CPU —")
         XCTAssertEqual(lines.full.bottom, "$0 +$5  ·  CM —  ·  OM —  ·  BOT —")

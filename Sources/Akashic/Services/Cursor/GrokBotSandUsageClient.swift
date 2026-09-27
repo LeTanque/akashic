@@ -2,8 +2,9 @@ import Foundation
 
 /// Grok Bot weekly Sand allowance (`GetSandUsageStatus`), ported from MetricsWidget `GrokBotUsageClient`.
 enum GrokBotSandUsageClient {
-    /// Percent **used** this week; `nil` when session missing, no allowance, or fetch failed.
-    static func fetchUsedPercent(accessToken: String) async -> Double? {
+    /// Percent **remaining** this week (`100 - usagePercent`, MetricsWidget bar semantics).
+    /// `nil` when session missing, no allowance, or fetch failed.
+    static func fetchRemainingPercent(accessToken: String) async -> Double? {
         var request = URLRequest(
             url: URL(string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetSandUsageStatus")!
         )
@@ -25,7 +26,8 @@ enum GrokBotSandUsageClient {
         }
 
         guard let used = number(json["usagePercent"]) else { return nil }
-        return min(100, max(0, used))
+        let remaining = min(100, max(0, 100 - used))
+        return remaining
     }
 
     private static func number(_ value: Any?) -> Double? {

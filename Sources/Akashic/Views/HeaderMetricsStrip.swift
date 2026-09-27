@@ -19,7 +19,7 @@ struct HeaderMetricsStrip: View {
             cursorBonusSpendUSD: cursorQuota.snapshot.cursorBonusSpendUSD,
             cursorModelsUsedPercent: cursorQuota.snapshot.cursorModelsUsedPercent,
             otherModelsUsedPercent: cursorQuota.snapshot.otherModelsUsedPercent,
-            grokBotUsedPercent: cursorQuota.snapshot.grokBotUsedPercent
+            grokBotRemainingPercent: cursorQuota.snapshot.grokBotRemainingPercent
         )
 
         stacked(lines.full)

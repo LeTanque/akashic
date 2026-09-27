@@ -157,7 +157,7 @@ enum MetricsStripText {
         cursorBonusSpendUSD: Double?,
         cursorModelsUsedPercent: Double?,
         otherModelsUsedPercent: Double?,
-        grokBotUsedPercent: Double?
+        grokBotRemainingPercent: Double?
     ) -> Lines {
         let disk = "DISK \(CompactBytes.freeOverUsed(free: diskFree, used: diskUsed))"
         let sys = "SYS \(CompactBytes.usedOverTotal(used: sysUsed, total: sysTotal))"
@@ -178,7 +178,11 @@ enum MetricsStripText {
         )
         let cm = quotaCell(short: "CM", fullName: "Cursor Models", percentUsed: cursorModelsUsedPercent)
         let om = quotaCell(short: "OM", fullName: "Other Models", percentUsed: otherModelsUsedPercent)
-        let bot = quotaCell(short: "BOT", fullName: "Grok Bot weekly", percentUsed: grokBotUsedPercent)
+        let bot = quotaRemainingCell(
+            short: "BOT",
+            fullName: "Grok Bot weekly",
+            percentRemaining: grokBotRemainingPercent
+        )
 
         let usageRow = join([dollar.display, cm.display, om.display, bot.display])
         let usageSpoken = [dollar.spoken, cm.spoken, om.spoken, bot.spoken].joined(separator: separator)
@@ -225,6 +229,17 @@ enum MetricsStripText {
         return QuotaCell(
             display: "\(short) \(rounded)%",
             spoken: "\(fullName) \(rounded) percent used"
+        )
+    }
+
+    private static func quotaRemainingCell(short: String, fullName: String, percentRemaining: Double?) -> QuotaCell {
+        guard let percentRemaining else {
+            return QuotaCell(display: "\(short) \(empty)", spoken: "\(fullName) unavailable")
+        }
+        let rounded = Int(percentRemaining.rounded())
+        return QuotaCell(
+            display: "\(short) \(rounded)%",
+            spoken: "\(fullName) \(rounded) percent remaining"
         )
     }
 }

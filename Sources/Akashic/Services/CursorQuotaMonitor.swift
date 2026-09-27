@@ -49,8 +49,8 @@ struct CursorQuotaSnapshot: Equatable, Sendable {
     /// `nil` → header shows `CM —`.
     var cursorModelsUsedPercent: Double?
     var otherModelsUsedPercent: Double?
-    /// Grok Bot weekly Sand % used; `nil` → `BOT —`.
-    var grokBotUsedPercent: Double?
+    /// Grok Bot weekly Sand % remaining; `nil` → `BOT —`.
+    var grokBotRemainingPercent: Double?
 }
 
 enum CursorQuotaLoader {
@@ -60,7 +60,7 @@ enum CursorQuotaLoader {
         }
 
         async let planTask = CursorPlanUsageClient.fetch(accessToken: token)
-        async let sandTask = GrokBotSandUsageClient.fetchUsedPercent(accessToken: token)
+        async let sandTask = GrokBotSandUsageClient.fetchRemainingPercent(accessToken: token)
         let plan = await planTask
         let sand = await sandTask
 
@@ -75,7 +75,7 @@ enum CursorQuotaLoader {
             cursorBonusSpendUSD: plan?.bonusSpendUSD,
             cursorModelsUsedPercent: quota.cursorModelsUsedPercent,
             otherModelsUsedPercent: quota.otherModelsUsedPercent,
-            grokBotUsedPercent: sand
+            grokBotRemainingPercent: sand
         )
     }
 }
