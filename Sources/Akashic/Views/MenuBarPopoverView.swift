@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarPopoverView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
+    @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.textZoom) private var textZoom
 
@@ -52,37 +53,55 @@ struct MenuBarPopoverView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Button {
-                store.addTodo()
-                openWindow(id: "main")
-            } label: {
-                Label("Add", systemImage: "plus")
-            }
-            .buttonStyle(CyberBorderedButtonStyle())
-            .keyboardShortcut("n", modifiers: .command)
-
-            Button {
-                sidebarVisibility.toggle()
-                openWindow(id: "main")
-            } label: {
-                Label(
-                    sidebarVisibility.isVisible ? "Hide Sidebar" : "Show Sidebar",
-                    systemImage: "sidebar.leading"
-                )
-            }
-            .buttonStyle(CyberBorderedButtonStyle())
-            .help("Toggle main window todo list (⌘⌥S)")
-
-            Spacer()
-
-            Button("Open Akashic") {
-                if store.selectedTodoID == nil {
-                    store.selectedTodoID = store.todos.first?.id
+        VStack(spacing: 8) {
+            HStack {
+                Button {
+                    store.addTodo()
+                    openWindow(id: "main")
+                } label: {
+                    Label("Add", systemImage: "plus")
                 }
-                openWindow(id: "main")
+                .buttonStyle(CyberBorderedButtonStyle())
+                .keyboardShortcut("n", modifiers: .command)
+
+                Spacer()
+
+                Button("Open Akashic") {
+                    if store.selectedTodoID == nil {
+                        store.selectedTodoID = store.todos.first?.id
+                    }
+                    openWindow(id: "main")
+                }
+                .buttonStyle(CyberBorderedButtonStyle())
             }
-            .buttonStyle(CyberBorderedButtonStyle())
+
+            HStack {
+                Button {
+                    sidebarVisibility.toggle()
+                    openWindow(id: "main")
+                } label: {
+                    Label(
+                        sidebarVisibility.isVisible ? "Hide Sidebar" : "Show Sidebar",
+                        systemImage: "sidebar.leading"
+                    )
+                }
+                .buttonStyle(CyberBorderedButtonStyle())
+                .help("Toggle main window todo list (⌘⌥S)")
+
+                Button {
+                    mainSectionVisibility.toggle()
+                    openWindow(id: "main")
+                } label: {
+                    Label(
+                        mainSectionVisibility.isVisible ? "Hide Editor" : "Show Editor",
+                        systemImage: "sidebar.trailing"
+                    )
+                }
+                .buttonStyle(CyberBorderedButtonStyle())
+                .help("Toggle main window editor (⌘⌥E)")
+
+                Spacer()
+            }
         }
         .padding(12)
         .background(Color.black.opacity(0.18))

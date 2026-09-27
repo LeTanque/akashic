@@ -12,6 +12,7 @@ private enum TodoListFilter: String, CaseIterable, Identifiable {
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
+    @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
     @Environment(\.textZoom) private var textZoom
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
@@ -32,13 +33,7 @@ struct MainWindowView: View {
             CyberHeaderStrip {
                 headerActions
             }
-            HSplitView {
-                if sidebarVisibility.isVisible {
-                    todoListColumn
-                }
-                detailColumn
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            mainContent
         }
         .frame(minWidth: 820, minHeight: 520)
         .background(MainWindowChromeConfigurator())
@@ -66,6 +61,28 @@ struct MainWindowView: View {
                             .fill(CyberpunkTheme.neonCyan)
                             .frame(height: 1)
                     }
+            }
+        }
+    }
+
+    private var showsMatrixRain: Bool {
+        !sidebarVisibility.isVisible && !mainSectionVisibility.isVisible
+    }
+
+    @ViewBuilder
+    private var mainContent: some View {
+        if showsMatrixRain {
+            MatrixDigitalRainView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            HSplitView {
+                if sidebarVisibility.isVisible {
+                    todoListColumn
+                }
+                if mainSectionVisibility.isVisible {
+                    detailColumn
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
     }
