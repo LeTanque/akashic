@@ -7,6 +7,7 @@ struct AkashicApp: App {
     @StateObject private var textZoom = TextZoomStore()
     @StateObject private var sidebarVisibility = SidebarVisibilityStore()
     @StateObject private var mainSectionVisibility = MainSectionVisibilityStore()
+    @StateObject private var mainWindowFullscreen = MainWindowFullscreenTracker()
     @NSApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -16,6 +17,7 @@ struct AkashicApp: App {
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
+                .environmentObject(mainWindowFullscreen)
                 .akashicTextZoom(textZoom)
                 .background(LaunchOpenMainWindow())
         }
@@ -28,6 +30,7 @@ struct AkashicApp: App {
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
+                .environmentObject(mainWindowFullscreen)
                 .akashicTextZoom(textZoom)
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
@@ -61,6 +64,11 @@ struct AkashicApp: App {
                 mainSectionVisibility.toggle()
             }
             .keyboardShortcut("e", modifiers: [.command, .option])
+
+            Button(mainWindowFullscreen.toggleMenuTitle) {
+                mainWindowFullscreen.toggle()
+            }
+            .keyboardShortcut("f", modifiers: [.command, .control])
 
             Divider()
 
