@@ -1,6 +1,7 @@
 import XCTest
 @testable import Akashic
 
+@MainActor
 final class SidebarVisibilityStoreTests: XCTestCase {
     private let defaultsKey = "akashic.mainWindow.sidebarVisible"
 
