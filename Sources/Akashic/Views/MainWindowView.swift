@@ -34,7 +34,10 @@ struct MainWindowView: View {
             mainContent
         }
         .overlay {
-            CompletionBreathOverlay(celebrationID: store.completionCelebrationID)
+            BorderCelebrationOverlay(
+                completionCelebrationID: store.completionCelebrationID,
+                deletionCelebrationID: store.deletionCelebrationID
+            )
         }
         .frame(minWidth: 820, minHeight: 520)
         .background(MainWindowChromeConfigurator())

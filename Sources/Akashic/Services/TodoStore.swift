@@ -8,6 +8,7 @@ final class TodoStore: ObservableObject {
     @Published var selectedTodoID: UUID?
     @Published var lastImportMessage: String?
     @Published private(set) var completionCelebrationID: UUID?
+    @Published private(set) var deletionCelebrationID: UUID?
     @Published private(set) var revealTodoInListID: UUID?
 
     private let db: DatabaseQueue
@@ -84,6 +85,7 @@ final class TodoStore: ObservableObject {
             selectedTodoID = nil
         }
         refresh()
+        deletionCelebrationID = UUID()
     }
 
     @discardableResult

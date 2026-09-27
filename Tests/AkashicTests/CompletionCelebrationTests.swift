@@ -25,4 +25,13 @@ final class CompletionCelebrationTests: XCTestCase {
         store.toggleCompletion(for: item.id)
         XCTAssertNotEqual(store.completionCelebrationID, first)
     }
+
+    func testDeleteTodoPublishesDeletionCelebrationID() throws {
+        let store = try TodoStore.isolatedForTesting()
+        let item = store.createTodo(title: "Remove me")
+        XCTAssertNil(store.deletionCelebrationID)
+
+        XCTAssertTrue(store.delete(id: item.id))
+        XCTAssertNotNil(store.deletionCelebrationID)
+    }
 }

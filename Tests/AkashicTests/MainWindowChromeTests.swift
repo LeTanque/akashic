@@ -291,8 +291,9 @@ final class MainWindowChromeTests: XCTestCase {
                 .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift"),
             encoding: .utf8
         )
-        XCTAssertTrue(mainSource.contains("CompletionBreathOverlay"))
+        XCTAssertTrue(mainSource.contains("BorderCelebrationOverlay"))
         XCTAssertTrue(mainSource.contains("completionCelebrationID"))
+        XCTAssertTrue(mainSource.contains("deletionCelebrationID"))
     }
 
     func testChromeSourceDoesNotCallIllegalContentBorderAPIs() throws {
