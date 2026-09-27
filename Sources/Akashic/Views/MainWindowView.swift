@@ -70,6 +70,11 @@ struct MainWindowView: View {
         !sidebarVisibility.isVisible && !mainSectionVisibility.isVisible
     }
 
+    /// Sidebar alone should fill the content area under the header (mirror of detail full width when sidebar is hidden).
+    private var sidebarExpandsToFill: Bool {
+        sidebarVisibility.isVisible && !mainSectionVisibility.isVisible
+    }
+
     @ViewBuilder
     private var mainContent: some View {
         if showsMatrixRain {
@@ -88,14 +93,19 @@ struct MainWindowView: View {
         }
     }
 
+    @ViewBuilder
     private var todoListColumn: some View {
-        VStack(spacing: 0) {
+        let list = VStack(spacing: 0) {
             filterStrip
             TodoListContent(todos: filteredTodos) { todo in
                 store.selectedTodoID = todo.id
             }
         }
-        .frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+        if sidebarExpandsToFill {
+            list.frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            list.frame(minWidth: 280, idealWidth: 320, maxWidth: 420)
+        }
     }
 
     @ViewBuilder
