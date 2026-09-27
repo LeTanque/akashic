@@ -8,6 +8,10 @@ enum CyberpunkTheme {
     static let completedShaded = Color(red: 24 / 255, green: 72 / 255, blue: 78 / 255)
     /// High priority accent — neon orange on black (`#ff7a1a`).
     static let neonOrange = Color(red: 1, green: 122 / 255, blue: 26 / 255)
+    /// Completion pulse — neon green (`#00ff8c`).
+    static let neonGreen = Color(red: 0, green: 1, blue: 140 / 255)
+    /// Completion pulse — neon red (`#ff2e5c`).
+    static let neonRed = Color(red: 1, green: 46 / 255, blue: 92 / 255)
     /// Row dividers (`#333333`).
     static let rowDivider = Color(red: 51 / 255, green: 51 / 255, blue: 51 / 255)
     /// Window / panel fill (`#000000`).

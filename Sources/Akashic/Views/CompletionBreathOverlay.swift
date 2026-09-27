@@ -1,27 +1,22 @@
 import SwiftUI
 
-/// Border-origin cyan pulse when a todo is marked complete (no center fill).
+/// Soft border-origin glow when a todo is marked complete (single pulse, tri-color cycle).
 struct CompletionBreathOverlay: View {
     var celebrationID: UUID?
 
-    @State private var breath: CGFloat = 0
+    @State private var pulse: CGFloat = 0
+    @State private var colorPhase: CGFloat = 0
     @State private var playingID: UUID?
     @State private var playbackTask: Task<Void, Never>?
 
-    private let borderColor = CyberpunkTheme.neonCyan
-
     var body: some View {
         GeometryReader { _ in
-            ZStack {
-                borderRing(inset: 0, lineWidth: 1 + breath * 2.5)
-                borderRing(inset: 0, lineWidth: 5 + breath * 10)
-                    .blur(radius: 3 + breath * 14)
-                borderRing(inset: 2 + breath * 10, lineWidth: 1.5 + breath * 2)
-                borderRing(inset: 6 + breath * 18, lineWidth: 1 + breath * 1.5)
-                    .blur(radius: 1 + breath * 4)
-            }
+            NeonWindowShellShape()
+                .inset(by: -pulse * 6)
+                .stroke(completionGlowColor, lineWidth: 14 + pulse * 32)
+                .blur(radius: 22 + pulse * 48)
         }
-        .opacity(breath > 0.001 ? 1 : 0)
+        .opacity(pulse > 0.001 ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .onChange(of: celebrationID) { _, newID in
@@ -30,26 +25,33 @@ struct CompletionBreathOverlay: View {
         }
     }
 
-    private func borderRing(inset: CGFloat, lineWidth: CGFloat) -> some View {
-        NeonWindowShellShape()
-            .inset(by: inset)
-            .stroke(borderColor, lineWidth: lineWidth)
+    private var completionGlowColor: Color {
+        switch colorPhase {
+        case ..<0.34:
+            return CyberpunkTheme.neonCyan
+        case ..<0.67:
+            return CyberpunkTheme.neonGreen
+        default:
+            return CyberpunkTheme.neonRed
+        }
     }
 
     private func startPlayback(id: UUID) {
         playbackTask?.cancel()
         playingID = id
-        breath = 0
+        pulse = 0
+        colorPhase = 0
 
         playbackTask = Task { @MainActor in
-            withAnimation(.easeInOut(duration: 0.22).repeatCount(2, autoreverses: true)) {
-                breath = 1
+            withAnimation(.easeOut(duration: 0.42)) {
+                pulse = 1
             }
-            try? await Task.sleep(for: .milliseconds(900))
-            withAnimation(.easeOut(duration: 0.08)) {
-                breath = 0
+            withAnimation(.linear(duration: 0.42)) {
+                colorPhase = 1
             }
-            try? await Task.sleep(for: .milliseconds(90))
+            try? await Task.sleep(for: .milliseconds(450))
+            pulse = 0
+            colorPhase = 0
             if playingID == id {
                 playingID = nil
             }

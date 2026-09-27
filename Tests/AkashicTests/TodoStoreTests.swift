@@ -8,6 +8,7 @@ final class TodoStoreTests: XCTestCase {
         store.createTodo(title: "Existing", priority: .high)
         store.addTodo(title: "Brand new")
         XCTAssertEqual(store.selectedTodo?.title, "Brand new")
+        XCTAssertEqual(store.revealTodoInListID, store.selectedTodoID)
     }
 
     func testCreateTodoDoesNotStealSelection() throws {

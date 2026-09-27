@@ -10,40 +10,51 @@ struct TodoListContent: View {
     let onSelect: (TodoItem) -> Void
 
     var body: some View {
-        List {
-            ForEach(todos) { todo in
-                TodoRowView(
-                    todo: todo,
-                    compact: compact,
-                    onToggleComplete: { store.toggleCompletion(for: todo.id) },
-                    onSelect: { onSelect(todo) }
-                )
-                .listRowInsets(EdgeInsets(
-                    top: 0,
-                    leading: compact ? 12 : 8,
-                    bottom: 0,
-                    trailing: compact ? 12 : 8
-                ))
-                .listRowSeparator(.hidden)
-                .listRowBackground(rowBackground(for: todo))
-                .contentShape(Rectangle())
-                .overlay(alignment: .bottom) {
-                    if compact {
-                        Divider().overlay(CyberpunkTheme.rowDivider)
-                    } else {
-                        Rectangle()
-                            .fill(CyberpunkTheme.rowDivider)
-                            .frame(height: 1)
+        ScrollViewReader { proxy in
+            List {
+                ForEach(todos) { todo in
+                    TodoRowView(
+                        todo: todo,
+                        compact: compact,
+                        onToggleComplete: { store.toggleCompletion(for: todo.id) },
+                        onSelect: { onSelect(todo) }
+                    )
+                    .id(todo.id)
+                    .listRowInsets(EdgeInsets(
+                        top: 0,
+                        leading: compact ? 12 : 8,
+                        bottom: 0,
+                        trailing: compact ? 12 : 8
+                    ))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(rowBackground(for: todo))
+                    .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        if compact {
+                            Divider().overlay(CyberpunkTheme.rowDivider)
+                        } else {
+                            Rectangle()
+                                .fill(CyberpunkTheme.rowDivider)
+                                .frame(height: 1)
+                        }
+                    }
+                }
+                .onMove { source, destination in
+                    store.moveTodos(from: source, to: destination, in: todos)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 1)
+            .onChange(of: store.revealTodoInListID) { _, id in
+                guard let id, todos.contains(where: { $0.id == id }) else { return }
+                DispatchQueue.main.async {
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        proxy.scrollTo(id, anchor: .top)
                     }
                 }
             }
-            .onMove { source, destination in
-                store.moveTodos(from: source, to: destination, in: todos)
-            }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .environment(\.defaultMinListRowHeight, 1)
     }
 
     private func rowBackground(for todo: TodoItem) -> Color {

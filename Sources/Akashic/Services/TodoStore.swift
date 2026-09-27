@@ -8,6 +8,7 @@ final class TodoStore: ObservableObject {
     @Published var selectedTodoID: UUID?
     @Published var lastImportMessage: String?
     @Published private(set) var completionCelebrationID: UUID?
+    @Published private(set) var revealTodoInListID: UUID?
 
     private let db: DatabaseQueue
     private let apiServer = TodoAPIServer()
@@ -53,6 +54,7 @@ final class TodoStore: ObservableObject {
     func addTodo(title: String = "New todo") {
         let item = insertNewTodo(title: title)
         selectedTodoID = item.id
+        revealTodoInListID = item.id
     }
 
     @discardableResult
