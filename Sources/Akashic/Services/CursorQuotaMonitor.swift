@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-/// Cursor Models / Other Models % used (Plan & Usage semantics), refreshed on a slow poll.
+/// Cursor included spend, Models quota, and Grok Bot Sand — refreshed on a slow poll (~120s).
 @MainActor
 final class CursorQuotaMonitor: ObservableObject {
     @Published private(set) var snapshot = CursorQuotaSnapshot()
@@ -42,24 +42,40 @@ final class CursorQuotaMonitor: ObservableObject {
 }
 
 struct CursorQuotaSnapshot: Equatable, Sendable {
-    /// `nil` → header shows `CM —` (no session or fetch failed).
+    /// Included spend still available (USD); `nil` → `$ —`.
+    var cursorIncludedRemainingUSD: Double?
+    /// Beyond-included spend when the API reports bonus usage.
+    var cursorBonusSpendUSD: Double?
+    /// `nil` → header shows `CM —`.
     var cursorModelsUsedPercent: Double?
     var otherModelsUsedPercent: Double?
+    /// Grok Bot weekly Sand % remaining; `nil` → `BOT —`.
+    var grokBotRemainingPercent: Double?
 }
 
 enum CursorQuotaLoader {
     static func load() async -> CursorQuotaSnapshot {
         guard let token = CursorStateDatabase.value(forKey: "cursorAuth/accessToken"), !token.isEmpty else {
-            return CursorQuotaSnapshot(cursorModelsUsedPercent: nil, otherModelsUsedPercent: nil)
+            return CursorQuotaSnapshot()
         }
-        async let planUsage = CursorDashboardQuotaClient.fetchPlanUsage(accessToken: token)
+
+        async let planTask = CursorPlanUsageClient.fetch(accessToken: token)
+        async let sandTask = GrokBotSandUsageClient.fetchRemainingPercent(accessToken: token)
+        let plan = await planTask
+        let sand = await sandTask
+
+        let planUsage = plan?.planUsage ?? [:]
         let quota = await CursorDashboardQuotaClient.fetch(
             accessToken: token,
-            planUsageFallback: await planUsage
+            planUsageFallback: planUsage
         )
+
         return CursorQuotaSnapshot(
+            cursorIncludedRemainingUSD: plan?.includedRemainingUSD,
+            cursorBonusSpendUSD: plan?.bonusSpendUSD,
             cursorModelsUsedPercent: quota.cursorModelsUsedPercent,
-            otherModelsUsedPercent: quota.otherModelsUsedPercent
+            otherModelsUsedPercent: quota.otherModelsUsedPercent,
+            grokBotRemainingPercent: sand
         )
     }
 }

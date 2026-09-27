@@ -19,25 +19,6 @@ enum CursorDashboardQuotaClient {
         return quotaFromPlanUsage(planUsageFallback)
     }
 
-    static func fetchPlanUsage(accessToken: String) async -> [String: Any] {
-        var request = URLRequest(
-            url: URL(string: "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage")!
-        )
-        request.httpMethod = "POST"
-        request.timeoutInterval = 12
-        request.httpBody = Data("{}".utf8)
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("1", forHTTPHeaderField: "Connect-Protocol-Version")
-
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [:] }
-        return json["planUsage"] as? [String: Any] ?? [:]
-    }
-
     private static func fetchUsageSummary(accessToken: String) async -> CursorDashboardQuota? {
         guard let cookie = CursorSessionAuth.sessionCookie(accessToken: accessToken) else { return nil }
 
