@@ -5,6 +5,7 @@ import AppKit
 struct AkashicApp: App {
     @StateObject private var store = TodoStore()
     @StateObject private var textZoom = TextZoomStore()
+    @StateObject private var sidebarVisibility = SidebarVisibilityStore()
     @NSApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
 
     var body: some Scene {
@@ -12,16 +13,18 @@ struct AkashicApp: App {
             MenuBarPopoverView()
                 .environmentObject(store)
                 .environmentObject(textZoom)
+                .environmentObject(sidebarVisibility)
                 .akashicTextZoom(textZoom)
                 .background(LaunchOpenMainWindow())
         }
         .menuBarExtraStyle(.window)
-        .commands { zoomCommands }
+        .commands { viewCommands }
 
         Window("Akashic", id: "main") {
             MainWindowView()
                 .environmentObject(store)
                 .environmentObject(textZoom)
+                .environmentObject(sidebarVisibility)
                 .akashicTextZoom(textZoom)
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
@@ -39,13 +42,20 @@ struct AkashicApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
-            zoomCommands
+            viewCommands
         }
     }
 
     @CommandsBuilder
-    private var zoomCommands: some Commands {
+    private var viewCommands: some Commands {
         CommandMenu("View") {
+            Button(sidebarVisibility.toggleMenuTitle) {
+                sidebarVisibility.toggle()
+            }
+            .keyboardShortcut("s", modifiers: [.command, .option])
+
+            Divider()
+
             Button("Zoom In") { textZoom.zoomIn() }
                 .keyboardShortcut("+", modifiers: .command)
                 .disabled(!textZoom.canZoomIn)

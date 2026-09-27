@@ -11,6 +11,7 @@ private enum TodoListFilter: String, CaseIterable, Identifiable {
 
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @Environment(\.textZoom) private var textZoom
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
@@ -32,8 +33,11 @@ struct MainWindowView: View {
                 headerActions
             }
             HSplitView {
-                todoListColumn
+                if sidebarVisibility.isVisible {
+                    todoListColumn
+                }
                 detailColumn
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .frame(minWidth: 820, minHeight: 520)

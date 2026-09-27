@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarPopoverView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.textZoom) private var textZoom
 
@@ -60,6 +61,18 @@ struct MenuBarPopoverView: View {
             }
             .buttonStyle(CyberBorderedButtonStyle())
             .keyboardShortcut("n", modifiers: .command)
+
+            Button {
+                sidebarVisibility.toggle()
+                openWindow(id: "main")
+            } label: {
+                Label(
+                    sidebarVisibility.isVisible ? "Hide Sidebar" : "Show Sidebar",
+                    systemImage: "sidebar.leading"
+                )
+            }
+            .buttonStyle(CyberBorderedButtonStyle())
+            .help("Toggle main window todo list (⌘⌥S)")
 
             Spacer()
 
