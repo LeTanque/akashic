@@ -1,3 +1,5 @@
+import AppKit
+import CoreText
 import SwiftUI
 
 /// Stationary Matrix-style glyph grid with a downward illumination wave (Nebuchadnezzar monitor).
@@ -22,7 +24,7 @@ struct MatrixDigitalRainView: View {
     }
 }
 
-private enum MatrixRainStyle {
+enum MatrixRainStyle {
     static let background = Color(red: 0.01, green: 0.03, blue: 0.015)
     static let matrixGreen = Color(red: 0, green: 1, blue: 65 / 255)
     static let dimGlyph = Color(red: 0, green: 0.12, blue: 0.04)
@@ -38,6 +40,147 @@ private enum MatrixRainStyle {
     static let glyphPool: [Character] = Array(
         "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     )
+
+    static let backgroundFill = NSColor(red: 0.01, green: 0.03, blue: 0.015, alpha: 1)
+    static let dimGlyphFill = NSColor(red: 0, green: 0.12, blue: 0.04, alpha: 1)
+    static let matrixGreenFill = NSColor(red: 0, green: 1, blue: 65 / 255, alpha: 1)
+    static let headHighlightFill = NSColor(red: 0.92, green: 1, blue: 0.94, alpha: 1)
+}
+
+// MARK: - Glyph atlas (one-time text rasterization, fast per-frame mask fills)
+
+final class MatrixGlyphAtlas {
+    static let shared = MatrixGlyphAtlas()
+
+    let cellWidth: CGFloat
+    let cellHeight: CGFloat
+    private let masks: [CGImage]
+
+    private init() {
+        let width = MatrixRainStyle.columnWidth
+        let height = MatrixRainStyle.rowHeight
+        cellWidth = width
+        cellHeight = height
+        masks = MatrixRainStyle.glyphPool.map { character in
+            MatrixGlyphAtlas.renderMask(for: character, cellWidth: width, cellHeight: height)
+        }
+    }
+
+    func drawGlyph(
+        in context: CGContext,
+        poolIndex: Int,
+        destRect: CGRect,
+        fillColor: CGColor,
+        alpha: CGFloat = 1
+    ) {
+        guard poolIndex >= 0, poolIndex < masks.count else { return }
+        context.saveGState()
+        if alpha < 0.999 {
+            context.setAlpha(alpha)
+        }
+        context.clip(to: destRect, mask: masks[poolIndex])
+        context.setFillColor(fillColor)
+        context.fill(destRect)
+        context.restoreGState()
+    }
+
+    private static func renderMask(for character: Character, cellWidth: CGFloat, cellHeight: CGFloat) -> CGImage {
+        let pixelWidth = max(1, Int(ceil(cellWidth * 2)))
+        let pixelHeight = max(1, Int(ceil(cellHeight * 2)))
+
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return emptyMask(width: pixelWidth, height: pixelHeight)
+        }
+
+        context.clear(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+        context.translateBy(x: 0, y: CGFloat(pixelHeight))
+        context.scaleBy(x: 1, y: -1)
+
+        let font = CTFontCreateWithName("Menlo" as CFString, MatrixRainStyle.fontSize * 2, nil)
+        let attributes: [CFString: Any] = [
+            kCTFontAttributeName: font,
+            kCTForegroundColorAttributeName: CGColor(red: 1, green: 1, blue: 1, alpha: 1),
+        ]
+        guard let attributed = CFAttributedStringCreate(nil, String(character) as CFString, attributes as CFDictionary) else {
+            return context.makeImage() ?? emptyMask(width: pixelWidth, height: pixelHeight)
+        }
+        let line = CTLineCreateWithAttributedString(attributed)
+
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let width = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+        let x = (CGFloat(pixelWidth) - width) / 2
+        let y = (CGFloat(pixelHeight) - (ascent + descent)) / 2 + descent
+        context.textPosition = CGPoint(x: x, y: y)
+        CTLineDraw(line, context)
+
+        return context.makeImage() ?? emptyMask(width: pixelWidth, height: pixelHeight)
+    }
+
+    private static func emptyMask(width: Int, height: Int) -> CGImage {
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ), let image = context.makeImage() else {
+            fatalError("Matrix glyph atlas could not allocate fallback mask")
+        }
+        return image
+    }
+}
+
+// MARK: - Static dim grid (rebuilt only on layout changes)
+
+private enum MatrixRainDimLayerRenderer {
+    static func makeDimLayer(layout: MatrixRainLayout, atlas: MatrixGlyphAtlas) -> CGImage? {
+        let pixelWidth = max(1, Int(ceil(layout.canvasSize.width)))
+        let pixelHeight = max(1, Int(ceil(layout.canvasSize.height)))
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        // Match SwiftUI Canvas top-left origin.
+        context.translateBy(x: 0, y: CGFloat(pixelHeight))
+        context.scaleBy(x: 1, y: -1)
+
+        context.setFillColor(MatrixRainStyle.backgroundFill.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+
+        let dimColor = MatrixRainStyle.dimGlyphFill.cgColor
+        for column in 0 ..< layout.columns {
+            for row in 0 ..< layout.rows {
+                let dest = layout.destRect(forColumn: column, row: row, atlas: atlas)
+                atlas.drawGlyph(
+                    in: context,
+                    poolIndex: layout.glyphIndex(column: column, row: row),
+                    destRect: dest,
+                    fillColor: dimColor
+                )
+            }
+        }
+        return context.makeImage()
+    }
 }
 
 private struct MatrixRainCanvas: View {
@@ -46,32 +189,56 @@ private struct MatrixRainCanvas: View {
     let reduceMotion: Bool
 
     @State private var layout: MatrixRainLayout?
+    @State private var dimLayer: CGImage?
 
     var body: some View {
         Canvas { context, canvasSize in
             guard let layout, layout.columns > 0, layout.rows > 0 else { return }
 
             let effectiveTime = reduceMotion ? 0 : time
-            let font = Font.system(size: MatrixRainStyle.fontSize, design: .monospaced)
+            let atlas = MatrixGlyphAtlas.shared
 
-            for column in 0 ..< layout.columns {
-                let headRow = layout.headRow(forColumn: column, time: effectiveTime)
-                for row in 0 ..< layout.rows {
-                    let delta = headRow - Double(row)
-                    let intensity = layout.trailIntensity(delta: delta)
-                    let color = layout.color(forIntensity: intensity)
-                    let glyph = layout.glyph(column: column, row: row)
-                    let point = CGPoint(
-                        x: CGFloat(column) * MatrixRainStyle.columnWidth + 2,
-                        y: CGFloat(row) * MatrixRainStyle.rowHeight + 2
-                    )
-                    context.draw(
-                        Text(String(glyph))
-                            .font(font)
-                            .foregroundColor(color),
-                        at: point,
-                        anchor: .topLeading
-                    )
+            context.withCGContext { cgContext in
+                if let dimLayer {
+                    cgContext.draw(dimLayer, in: CGRect(origin: .zero, size: canvasSize))
+                }
+
+                let green = MatrixRainStyle.matrixGreenFill.cgColor
+                let head = MatrixRainStyle.headHighlightFill.cgColor
+
+                for column in 0 ..< layout.columns {
+                    let headRow = layout.headRow(forColumn: column, time: effectiveTime)
+                    let lastRow = min(layout.rows - 1, Int(floor(headRow)))
+                    var firstRow = Int(floor(headRow - MatrixRainStyle.trailLength)) + 1
+                    if firstRow < 0 { firstRow = 0 }
+                    guard firstRow <= lastRow else { continue }
+
+                    for row in firstRow ... lastRow {
+                        let delta = headRow - Double(row)
+                        let intensity = layout.trailIntensity(delta: delta)
+                        guard intensity > 0.001 else { continue }
+
+                        let dest = layout.destRect(forColumn: column, row: row, atlas: atlas)
+                        let poolIndex = layout.glyphIndex(column: column, row: row)
+
+                        if intensity > 0.92 {
+                            atlas.drawGlyph(
+                                in: cgContext,
+                                poolIndex: poolIndex,
+                                destRect: dest,
+                                fillColor: head
+                            )
+                        } else {
+                            let alpha = CGFloat(0.25 + intensity * 0.75)
+                            atlas.drawGlyph(
+                                in: cgContext,
+                                poolIndex: poolIndex,
+                                destRect: dest,
+                                fillColor: green,
+                                alpha: alpha
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -84,15 +251,20 @@ private struct MatrixRainCanvas: View {
     private func refreshLayoutIfNeeded(for newSize: CGSize) {
         guard newSize.width > 0, newSize.height > 0 else { return }
         if layout?.matches(size: newSize) == true { return }
-        layout = MatrixRainLayout(size: newSize)
+        let newLayout = MatrixRainLayout(size: newSize)
+        layout = newLayout
+        dimLayer = MatrixRainDimLayerRenderer.makeDimLayer(
+            layout: newLayout,
+            atlas: MatrixGlyphAtlas.shared
+        )
     }
 }
 
-private struct MatrixRainLayout {
+struct MatrixRainLayout {
     let canvasSize: CGSize
     let columns: Int
     let rows: Int
-    private let glyphs: [[Character]]
+    private let glyphIndices: [[Int]]
     private let columnPhases: [Double]
     private let columnSpeeds: [Double]
 
@@ -100,20 +272,20 @@ private struct MatrixRainLayout {
         canvasSize = size
         columns = max(1, Int(size.width / MatrixRainStyle.columnWidth))
         rows = max(1, Int(size.height / MatrixRainStyle.rowHeight))
-        let pool = MatrixRainStyle.glyphPool
+        let poolCount = MatrixRainStyle.glyphPool.count
 
-        var grid = [[Character]]()
+        var grid = [[Int]]()
         grid.reserveCapacity(columns)
         for column in 0 ..< columns {
-            var columnGlyphs = [Character]()
-            columnGlyphs.reserveCapacity(rows)
+            var columnIndices = [Int]()
+            columnIndices.reserveCapacity(rows)
             for row in 0 ..< rows {
                 let seed = column &* 31_415 &+ row &* 2_718
-                columnGlyphs.append(pool[abs(seed) % pool.count])
+                columnIndices.append(abs(seed) % poolCount)
             }
-            grid.append(columnGlyphs)
+            grid.append(columnIndices)
         }
-        glyphs = grid
+        glyphIndices = grid
 
         var phases = [Double]()
         var speeds = [Double]()
@@ -132,8 +304,17 @@ private struct MatrixRainLayout {
         canvasSize == size
     }
 
-    func glyph(column: Int, row: Int) -> Character {
-        glyphs[column][row]
+    func glyphIndex(column: Int, row: Int) -> Int {
+        glyphIndices[column][row]
+    }
+
+    func destRect(forColumn column: Int, row: Int, atlas: MatrixGlyphAtlas) -> CGRect {
+        CGRect(
+            x: CGFloat(column) * MatrixRainStyle.columnWidth + 2,
+            y: CGFloat(row) * MatrixRainStyle.rowHeight + 2,
+            width: atlas.cellWidth,
+            height: atlas.cellHeight
+        )
     }
 
     func headRow(forColumn column: Int, time: TimeInterval) -> Double {
