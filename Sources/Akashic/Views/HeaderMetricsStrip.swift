@@ -2,23 +2,24 @@ import SwiftUI
 
 /// Compact, display-only HUD in the main-window top header chrome
 /// (`CyberHeaderStrip`, leading-aligned to the left of the wordmark).
-/// Three rows: DISK/SYS, CPU/CA (+ BOT), CM/OM Cursor quota. Not a side panel or
+/// Two rows: DISK/SYS/CPU machine stats, then Cursor $ + CM + OM + BOT. Not a side panel or
 /// bottom inset; not shown in the menu-bar popover.
 struct HeaderMetricsStrip: View {
     @StateObject private var live = LiveMetricsMonitor()
     @StateObject private var cursorQuota = CursorQuotaMonitor()
-    @ObservedObject private var agents = AgentMetricsStore.shared
 
     var body: some View {
         let lines = MetricsStripText.make(
             diskFree: live.snapshot.diskFree,
+            diskUsed: live.snapshot.diskUsed,
             sysUsed: live.snapshot.sysUsed,
             sysTotal: live.snapshot.sysTotal,
             cpuPercent: live.snapshot.cpuPercent,
-            cloudAgents: agents.displayedCloudAgentCount(),
-            bots: agents.displayedBotCount(),
+            cursorIncludedRemainingUSD: cursorQuota.snapshot.cursorIncludedRemainingUSD,
+            cursorBonusSpendUSD: cursorQuota.snapshot.cursorBonusSpendUSD,
             cursorModelsUsedPercent: cursorQuota.snapshot.cursorModelsUsedPercent,
-            otherModelsUsedPercent: cursorQuota.snapshot.otherModelsUsedPercent
+            otherModelsUsedPercent: cursorQuota.snapshot.otherModelsUsedPercent,
+            grokBotUsedPercent: cursorQuota.snapshot.grokBotUsedPercent
         )
 
         stacked(lines.full)
@@ -38,8 +39,7 @@ struct HeaderMetricsStrip: View {
     private func stacked(_ rows: MetricsStripText.Rows) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             row(rows.top)
-            row(rows.middle)
-            row(rows.quota)
+            row(rows.bottom)
         }
     }
 

@@ -31,8 +31,9 @@ final class LiveMetricsMonitor: ObservableObject {
 
     func sample() {
         var next = snapshot
-        if let free = MachHostMetrics.systemFreeBytes() {
-            next.diskFree = free
+        if let disk = MachHostMetrics.systemDiskBytes() {
+            next.diskFree = disk.free
+            next.diskUsed = disk.used
         }
         if let sys = MachHostMetrics.systemMemory() {
             next.sysUsed = sys.used
@@ -49,8 +50,9 @@ final class LiveMetricsMonitor: ObservableObject {
 }
 
 struct LiveMetricsSnapshot: Equatable, Sendable {
-    /// Free space on `MachHostMetrics.freeSpaceVolumePath` (home/Data volume).
+    /// Free / used on `MachHostMetrics.freeSpaceVolumePath` (home/Data volume).
     var diskFree: UInt64 = 0
+    var diskUsed: UInt64 = 0
     var sysUsed: UInt64 = 0
     var sysTotal: UInt64 = 0
     /// Machine-wide 0–100 once two tick samples exist; `nil` until then.
@@ -68,6 +70,19 @@ enum CompactBytes {
         if value >= gigabyte { return scaled(value / gigabyte, suffix: "G") }
         if value >= megabyte { return scaled(value / megabyte, suffix: "M") }
         return scaled(value / kilobyte, suffix: "K")
+    }
+
+    /// `64/392G` — free / used on the same unit scale.
+    static func freeOverUsed(free: UInt64, used: UInt64) -> String {
+        let scale = max(free, used)
+        let scaleValue = Double(scale)
+        if scaleValue >= gigabyte * 0.5 {
+            return "\(Int((Double(free) / gigabyte).rounded()))/\(Int((Double(used) / gigabyte).rounded()))G"
+        }
+        if scaleValue >= megabyte {
+            return "\(Int((Double(free) / megabyte).rounded()))/\(Int((Double(used) / megabyte).rounded()))M"
+        }
+        return "\(format(free))/\(format(used))"
     }
 
     /// `18/36G` sharing the total's unit.
@@ -94,38 +109,57 @@ enum CompactBytes {
     }
 }
 
+enum CompactUSD {
+    /// Short remaining label for the header (`$42`, `$1.50`).
+    static func remaining(_ usd: Double) -> String {
+        let magnitude = abs(usd)
+        if magnitude >= 1 {
+            return "$\(Int(usd.rounded()))"
+        }
+        let cents = (usd * 100).rounded() / 100
+        if cents == cents.rounded() {
+            return "$\(Int(cents))"
+        }
+        return String(format: "$%.2f", cents)
+    }
+
+    static func beyondIncluded(_ usd: Double) -> String {
+        "+\(remaining(usd))"
+    }
+}
+
 enum MetricsStripText {
     static let separator = "  ·  "
     /// Same metrics; only the gutter between labels shrinks.
     static let tightSeparator = " · "
     static let empty = "—"
 
-    /// Stacked header rows (`top` / `middle` / `quota`). Left-aligned HUD lines.
+    /// Stacked header rows (`top` machine row, `bottom` Cursor usage row).
     struct Rows: Equatable {
         var top: String
-        var middle: String
-        var quota: String
+        var bottom: String
     }
 
     struct Lines: Equatable {
-        /// DISK + SYS / CPU + CA (+ BOT) / CM + OM quota row.
+        /// DISK + SYS + CPU / $ + CM + OM + BOT.
         var full: Rows
         var tight: Rows
-        /// Single spoken line for accessibility (full quota names).
         var spoken: String
     }
 
     static func make(
         diskFree: UInt64,
+        diskUsed: UInt64,
         sysUsed: UInt64,
         sysTotal: UInt64,
         cpuPercent: Double?,
-        cloudAgents: Int?,
-        bots: Int?,
+        cursorIncludedRemainingUSD: Double?,
+        cursorBonusSpendUSD: Double?,
         cursorModelsUsedPercent: Double?,
-        otherModelsUsedPercent: Double?
+        otherModelsUsedPercent: Double?,
+        grokBotUsedPercent: Double?
     ) -> Lines {
-        let disk = "DISK \(CompactBytes.format(diskFree))"
+        let disk = "DISK \(CompactBytes.freeOverUsed(free: diskFree, used: diskUsed))"
         let sys = "SYS \(CompactBytes.usedOverTotal(used: sysUsed, total: sysTotal))"
         let cpu: String = {
             if let cpuPercent {
@@ -133,40 +167,32 @@ enum MetricsStripText {
             }
             return "CPU \(empty)"
         }()
-        let ca: String = {
-            if let cloudAgents {
-                return "CA \(cloudAgents)"
-            }
-            return "CA \(empty)"
-        }()
-        let bot = bots.map { "BOT \($0)" }
 
         func join(_ parts: [String], separator: String = separator) -> String {
             parts.joined(separator: separator)
         }
 
-        var row2 = [cpu, ca]
-        if let bot {
-            row2.append(bot)
-        }
-
+        let dollar = cursorDollarCell(
+            remainingUSD: cursorIncludedRemainingUSD,
+            bonusUSD: cursorBonusSpendUSD
+        )
         let cm = quotaCell(short: "CM", fullName: "Cursor Models", percentUsed: cursorModelsUsedPercent)
         let om = quotaCell(short: "OM", fullName: "Other Models", percentUsed: otherModelsUsedPercent)
-        let quotaRow = join([cm.display, om.display])
-        let quotaSpoken = [cm.spoken, om.spoken].joined(separator: separator)
+        let bot = quotaCell(short: "BOT", fullName: "Grok Bot weekly", percentUsed: grokBotUsedPercent)
 
-        let spokenParts = [disk, sys] + row2 + [quotaSpoken]
+        let usageRow = join([dollar.display, cm.display, om.display, bot.display])
+        let usageSpoken = [dollar.spoken, cm.spoken, om.spoken, bot.spoken].joined(separator: separator)
+
+        let spokenParts = [disk, sys, cpu, usageSpoken]
 
         return Lines(
             full: Rows(
-                top: join([disk, sys]),
-                middle: join(row2),
-                quota: quotaRow
+                top: join([disk, sys, cpu]),
+                bottom: usageRow
             ),
             tight: Rows(
-                top: join([disk, sys], separator: tightSeparator),
-                middle: join(row2, separator: tightSeparator),
-                quota: join([cm.display, om.display], separator: tightSeparator)
+                top: join([disk, sys, cpu], separator: tightSeparator),
+                bottom: join([dollar.display, cm.display, om.display, bot.display], separator: tightSeparator)
             ),
             spoken: join(spokenParts)
         )
@@ -175,6 +201,20 @@ enum MetricsStripText {
     private struct QuotaCell {
         var display: String
         var spoken: String
+    }
+
+    private static func cursorDollarCell(remainingUSD: Double?, bonusUSD: Double?) -> QuotaCell {
+        guard let remainingUSD else {
+            return QuotaCell(display: "$ \(empty)", spoken: "Cursor included spend unavailable")
+        }
+        var display = CompactUSD.remaining(remainingUSD)
+        var spoken = "\(display) included spend remaining"
+        if let bonusUSD, bonusUSD > 0 {
+            let extra = CompactUSD.beyondIncluded(bonusUSD)
+            display += " \(extra)"
+            spoken += ", \(extra) beyond included"
+        }
+        return QuotaCell(display: display, spoken: spoken)
     }
 
     private static func quotaCell(short: String, fullName: String, percentUsed: Double?) -> QuotaCell {
@@ -193,11 +233,15 @@ enum MachHostMetrics {
     /// Volume whose free space the header HUD shows (typically the macOS Data volume).
     static let freeSpaceVolumePath = FileManager.default.homeDirectoryForCurrentUser.path
 
-    static func systemFreeBytes() -> UInt64? {
+    static func systemDiskBytes() -> (free: UInt64, used: UInt64)? {
         guard let attrs = try? FileManager.default.attributesOfFileSystem(forPath: freeSpaceVolumePath),
-              let free = attrs[.systemFreeSize] as? NSNumber
+              let freeNumber = attrs[.systemFreeSize] as? NSNumber,
+              let totalNumber = attrs[.systemSize] as? NSNumber
         else { return nil }
-        return free.uint64Value
+        let free = freeNumber.uint64Value
+        let total = totalNumber.uint64Value
+        let used = total > free ? total - free : 0
+        return (free, used)
     }
 
     static func systemMemory() -> (used: UInt64, total: UInt64)? {

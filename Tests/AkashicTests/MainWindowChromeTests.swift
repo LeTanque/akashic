@@ -93,7 +93,7 @@ final class MainWindowChromeTests: XCTestCase {
         )
     }
 
-    /// The main-window HUD must always render DISK/SYS + CPU/CA + CM/OM. ViewThatFits
+    /// The main-window HUD must always render both machine + usage rows. ViewThatFits
     /// falling back to short rows is the PR #10 bug.
     func testHeaderMetricsStripAlwaysShowsFullRows() throws {
         let stripURL = URL(fileURLWithPath: #filePath)
@@ -104,15 +104,16 @@ final class MainWindowChromeTests: XCTestCase {
         let source = try String(contentsOf: stripURL, encoding: .utf8)
         XCTAssertTrue(
             source.contains("stacked(lines.full)"),
-            "Header metrics must render the full DISK/SYS + CPU/CA + quota rows"
+            "Header metrics must render the full machine + Cursor usage rows"
         )
         XCTAssertFalse(
             source.contains("ViewThatFits("),
             "ViewThatFits must not drop SYS/CPU when the leading column is tight"
         )
         XCTAssertFalse(source.contains("lines.short"), "short row pair omits SYS/CPU")
-        XCTAssertFalse(source.contains("lines.minimal"), "minimal row omits SYS/CPU/CA")
+        XCTAssertFalse(source.contains("lines.minimal"), "minimal row omits SYS/CPU")
         XCTAssertFalse(source.contains("lines.compact"), "compact row omits SYS")
+        XCTAssertFalse(source.contains("AgentMetricsStore"), "CA feeder must not drive the header HUD")
     }
 
     /// AppKit throws (SIGTRAP via `+[NSApplication _crashOnException:]`) if these
