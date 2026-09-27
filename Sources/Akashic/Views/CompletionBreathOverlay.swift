@@ -30,11 +30,14 @@ struct CompletionBreathOverlay: View {
         pulse = 0
 
         playbackTask = Task { @MainActor in
-            withAnimation(.easeOut(duration: 0.42)) {
+            withAnimation(.easeIn(duration: 0.16)) {
                 pulse = 1
             }
-            try? await Task.sleep(for: .milliseconds(450))
-            pulse = 0
+            try? await Task.sleep(for: .milliseconds(170))
+            withAnimation(.easeOut(duration: 0.48)) {
+                pulse = 0
+            }
+            try? await Task.sleep(for: .milliseconds(500))
             if playingID == id {
                 playingID = nil
             }
