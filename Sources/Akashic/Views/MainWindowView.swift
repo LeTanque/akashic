@@ -13,6 +13,7 @@ struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
+    @EnvironmentObject private var mainWindowFullscreen: MainWindowFullscreenTracker
     @Environment(\.textZoom) private var textZoom
     @Environment(\.dismissWindow) private var dismissWindow
     @State private var listFilter: TodoListFilter = .all
@@ -142,6 +143,15 @@ struct MainWindowView: View {
                     .imageScale(.medium)
             }
             .help("Import todos from JSON file…")
+            .buttonStyle(CyberHeaderIconButtonStyle())
+
+            Button {
+                mainWindowFullscreen.toggle()
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .imageScale(.medium)
+            }
+            .help(mainWindowFullscreen.headerTooltip)
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {

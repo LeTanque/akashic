@@ -18,7 +18,7 @@ struct MatrixDigitalRainView: View {
     }
 
     private var frameInterval: TimeInterval {
-        reduceMotion ? 1.0 / 4 : 1.0 / 30
+        reduceMotion ? 1.0 / 6 : 1.0 / 60
     }
 }
 
