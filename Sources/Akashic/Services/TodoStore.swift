@@ -7,6 +7,7 @@ final class TodoStore: ObservableObject {
     @Published private(set) var todos: [TodoItem] = []
     @Published var selectedTodoID: UUID?
     @Published var lastImportMessage: String?
+    @Published private(set) var completionCelebrationID: UUID?
 
     private let db: DatabaseQueue
     private let apiServer = TodoAPIServer()
@@ -92,6 +93,7 @@ final class TodoStore: ObservableObject {
 
     func toggleCompletion(for id: UUID) {
         guard var item = todos.first(where: { $0.id == id }) else { return }
+        let wasCompleted = item.completed
         item.completed.toggle()
         item.updatedAt = Date()
         if item.completed {
@@ -100,6 +102,9 @@ final class TodoStore: ObservableObject {
             item.completedAt = nil
         }
         persist(item, bumpUpdatedAt: false)
+        if CompletionCelebration.shouldCelebrate(wasCompleted: wasCompleted, nowCompleted: item.completed) {
+            completionCelebrationID = UUID()
+        }
     }
 
     func todos(status: String) -> [TodoItem] {
@@ -128,8 +133,12 @@ final class TodoStore: ObservableObject {
         if let priority { item.priority = priority }
         if let completeBy { item.completeBy = completeBy }
         if let completed, item.completed != completed {
+            let wasCompleted = item.completed
             item.completed = completed
             item.completedAt = completed ? Date() : nil
+            if CompletionCelebration.shouldCelebrate(wasCompleted: wasCompleted, nowCompleted: item.completed) {
+                completionCelebrationID = UUID()
+            }
         }
         persist(item, bumpUpdatedAt: true)
         return todos.first { $0.id == id }

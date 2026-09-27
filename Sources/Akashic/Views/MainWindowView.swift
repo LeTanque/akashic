@@ -33,6 +33,9 @@ struct MainWindowView: View {
             }
             mainContent
         }
+        .overlay {
+            CompletionBreathOverlay(celebrationID: store.completionCelebrationID)
+        }
         .frame(minWidth: 820, minHeight: 520)
         .background(MainWindowChromeConfigurator())
         .neonWindowFrame()

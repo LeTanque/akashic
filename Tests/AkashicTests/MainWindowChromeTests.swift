@@ -282,6 +282,19 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertTrue(menuSource.contains("Quit Akashic"))
     }
 
+    func testMainWindowShowsCompletionBreathOverlay() throws {
+        let mainSource = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(mainSource.contains("CompletionBreathOverlay"))
+        XCTAssertTrue(mainSource.contains("completionCelebrationID"))
+    }
+
     func testChromeSourceDoesNotCallIllegalContentBorderAPIs() throws {
         let chromeURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
