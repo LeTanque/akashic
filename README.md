@@ -104,6 +104,6 @@ Todo titles, descriptions, and editors scale by an explicit point-size factor (c
 - New todos open in the editor immediately. Selecting a todo does not change its list position.
 - Click-hold-drag reorders the list. Default stack is high → medium → low; drag can override that. Completed items stay at the bottom.
 - App chrome uses smoked-glass vibrancy (`NSVisualEffectView` HUD material) with a light black veil; neon frame stays on top.
-- Title and description support Markdown, including tappable links. The editor description field formats live as you type (same `AttributedString(markdown:)` stack as list rows); the title field stays a plain text editor.
+- Title and description support Markdown, including tappable links, headings, and bullet lists. Both editor fields keep a raw-source `NSTextView` (smart quotes/dashes off so `- ` list markers survive) and a live formatted preview from the same renderer as list rows. SQLite stores the raw markdown strings.
 - Priority: high / medium / low. Optional **complete by** date and time; **created on** and **completed at** are stored and shown when set.
 - Dependencies: [GRDB](https://github.com/groue/GRDB.swift), [FlyingFox](https://github.com/swhitty/FlyingFox).

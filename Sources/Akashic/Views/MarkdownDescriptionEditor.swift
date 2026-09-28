@@ -1,26 +1,34 @@
 import AppKit
 import SwiftUI
 
-/// Description field: editable markdown source plus a live formatted preview.
+/// Markdown source plus a live formatted preview for title and description.
 ///
-/// The `TextEditor`-class surface is an `NSTextView` so smart quotes/dashes stay
-/// off (they break CommonMark) and the caret/selection stay on the source string.
+/// The editing surface is an `NSTextView` so smart quotes/dashes stay off
+/// (they break CommonMark list markers) and the caret stays on the source string.
 /// Formatted output is the same `MarkdownRenderer` / `MarkdownText` stack used
 /// by list rows — no preview toggle, updates on every keystroke.
-struct MarkdownDescriptionEditor: View {
+/// SQLite still stores the raw markdown binding, never the attributed preview.
+struct MarkdownLiveEditor: View {
     @Environment(\.textZoom) private var textZoom
 
     @Binding var text: String
     var onCommit: () -> Void
+    var sourceAccessibilityLabel: String
+    var sourceFontSize: CGFloat = AkashicFont.callout
+    var sourceMinHeight: CGFloat = 100
+    var previewMinHeight: CGFloat = 72
+    var previewPointSize: CGFloat = AkashicFont.callout
+    var previewWeight: Font.Weight = .regular
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             MarkdownSourceEditor(
                 text: $text,
-                fontSize: AkashicFont.callout * textZoom,
+                fontSize: sourceFontSize * textZoom,
+                accessibilityLabel: sourceAccessibilityLabel,
                 onChange: onCommit
             )
-            .frame(minHeight: 100 * textZoom)
+            .frame(minHeight: sourceMinHeight * textZoom)
             .padding(8)
 
             Rectangle()
@@ -28,7 +36,7 @@ struct MarkdownDescriptionEditor: View {
                 .frame(height: 1)
 
             livePreview
-                .frame(maxWidth: .infinity, minHeight: 72 * textZoom, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: previewMinHeight * textZoom, alignment: .topLeading)
                 .padding(8)
         }
         .cyberPanel()
@@ -46,7 +54,8 @@ struct MarkdownDescriptionEditor: View {
         } else {
             MarkdownText(
                 markdown: text,
-                pointSize: AkashicFont.callout,
+                pointSize: previewPointSize,
+                weight: previewWeight,
                 foreground: CyberpunkTheme.neonCyan
             )
             .textSelection(.enabled)
@@ -60,6 +69,7 @@ struct MarkdownDescriptionEditor: View {
 struct MarkdownSourceEditor: NSViewRepresentable {
     @Binding var text: String
     var fontSize: CGFloat
+    var accessibilityLabel: String
     var onChange: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -85,7 +95,7 @@ struct MarkdownSourceEditor: NSViewRepresentable {
 
         textView.delegate = context.coordinator
         textView.string = text
-        textView.setAccessibilityLabel("Description markdown source")
+        textView.setAccessibilityLabel(accessibilityLabel)
         configureChrome(textView)
         applyTypography(to: textView, force: true)
         context.coordinator.textView = textView
@@ -97,6 +107,7 @@ struct MarkdownSourceEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         configureChrome(textView)
         applyTypography(to: textView, force: false)
+        textView.setAccessibilityLabel(accessibilityLabel)
 
         guard textView.string != text else { return }
         let selected = textView.selectedRange()
