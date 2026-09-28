@@ -19,14 +19,16 @@ struct TodoEditorView: View {
                         .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                     HStack(alignment: .top, spacing: 8) {
-                        TextEditor(text: $draft.title)
-                            .font(AkashicFont.mono(AkashicFont.body, zoom: textZoom))
-                            .foregroundStyle(CyberpunkTheme.neonCyan)
-                            .frame(minHeight: 60 * textZoom)
-                            .scrollContentBackground(.hidden)
-                            .padding(8)
-                            .cyberPanel()
-                            .onChange(of: draft.title) { _, _ in commitIfChanged() }
+                        MarkdownLiveEditor(
+                            text: $draft.title,
+                            onCommit: commitIfChanged,
+                            sourceAccessibilityLabel: "Title markdown source",
+                            sourceFontSize: AkashicFont.body,
+                            sourceMinHeight: 56,
+                            previewMinHeight: 48,
+                            previewPointSize: AkashicFont.body,
+                            previewWeight: .semibold
+                        )
 
                         CompletionCheckbox(
                             completed: draft.completed,
@@ -45,9 +47,10 @@ struct TodoEditorView: View {
                     Text("Description (markdown)")
                         .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
-                    MarkdownDescriptionEditor(
+                    MarkdownLiveEditor(
                         text: $draft.description,
-                        onCommit: commitIfChanged
+                        onCommit: commitIfChanged,
+                        sourceAccessibilityLabel: "Description markdown source"
                     )
                 }
 
