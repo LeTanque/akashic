@@ -19,7 +19,7 @@ struct UnsavedChangesAlertPresenter: UnsavedChangesAlertPresenting {
 
         let root = UnsavedChangesAlertView(todoDisplayName: todoDisplayName) { choice in
             state.choice = choice
-            NSApp.stopModal(withCode: NSApplication.ModalResponse.OK.rawValue)
+            NSApp.stopModal(withCode: .OK)
         }
 
         let panel = UnsavedChangesAlertPanel(rootView: root, size: panelSize, origin: origin)
@@ -29,7 +29,7 @@ struct UnsavedChangesAlertPresenter: UnsavedChangesAlertPresenting {
             guard panel.isKeyWindow else { return event }
             if event.keyCode == 53 {
                 state.choice = .cancel
-                NSApp.stopModal(withCode: NSApplication.ModalResponse.OK.rawValue)
+                NSApp.stopModal(withCode: .OK)
                 return nil
             }
             return event
