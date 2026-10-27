@@ -3,17 +3,19 @@ import XCTest
 
 @MainActor
 final class TodoStoreTests: XCTestCase {
-    func testAddTodoSelectsTheNewItem() throws {
+    func testAddTodoOpensBlankDraftWithoutInserting() throws {
         let store = try TodoStore.isolatedForTesting()
         store.createTodo(title: "Existing", priority: .high)
-        store.addTodo(title: "Brand new")
-        XCTAssertEqual(store.selectedTodo?.title, "Brand new")
-        XCTAssertEqual(store.revealTodoInListID, store.selectedTodoID)
+        let count = store.todos.count
+        store.addTodo()
+        XCTAssertNil(store.selectedTodoID)
+        XCTAssertEqual(store.todos.count, count)
     }
 
     func testCreateTodoDoesNotStealSelection() throws {
         let store = try TodoStore.isolatedForTesting()
-        store.addTodo(title: "Selected")
+        let selectedItem = store.createTodo(title: "Selected")
+        store.selectedTodoID = selectedItem.id
         let selected = try XCTUnwrap(store.selectedTodoID)
         store.createTodo(title: "Via API", priority: .high)
         XCTAssertEqual(store.selectedTodoID, selected)

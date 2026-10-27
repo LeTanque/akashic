@@ -10,6 +10,7 @@ private enum TodoListFilter: String, CaseIterable, Identifiable {
 
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var editorSession: TodoEditorSession
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
     @Environment(\.textZoom) private var textZoom
@@ -41,16 +42,18 @@ struct MainWindowView: View {
         }
         .frame(minWidth: 820, minHeight: 520)
         .background(MainWindowChromeConfigurator())
+        .background(WindowUnsavedChangesGuard(session: editorSession, store: store))
         .neonWindowFrame()
         .toolbar(.hidden, for: .windowToolbar)
         .toolbar(removing: .sidebarToggle)
         .ignoresSafeArea(.container, edges: .top)
         .preferredColorScheme(.dark)
         .tint(CyberpunkTheme.neonCyan)
+        .onChange(of: store.selectedTodoID) { _, newID in
+            editorSession.syncToSelection(store: store, selectedID: newID)
+        }
         .onAppear {
-            if store.selectedTodoID == nil {
-                store.selectedTodoID = store.todos.first?.id
-            }
+            editorSession.syncToSelection(store: store, selectedID: store.selectedTodoID)
         }
     }
 
@@ -86,7 +89,7 @@ struct MainWindowView: View {
         let list = VStack(spacing: 0) {
             filterStrip
             TodoListContent(todos: filteredTodos) { todo in
-                store.selectedTodoID = todo.id
+                _ = editorSession.selectTodo(todo, store: store)
             }
         }
         if sidebarExpandsToFill {
@@ -98,26 +101,13 @@ struct MainWindowView: View {
 
     @ViewBuilder
     private var detailColumn: some View {
-        if let todo = store.selectedTodo {
-            TodoEditorView(todo: todo)
-                .id(todo.id)
-        } else {
-            VStack(spacing: 12) {
-                Text("Select a todo")
-                    .font(AkashicFont.mono(AkashicFont.title, weight: .bold, zoom: textZoom))
-                    .foregroundStyle(CyberpunkTheme.neonCyan)
-                Text("Choose an item or add one from the header.")
-                    .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
-                    .foregroundStyle(CyberpunkTheme.completedShaded)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        TodoEditorView(session: editorSession)
     }
 
     private var headerActions: some View {
         HStack(spacing: 6) {
             Button {
-                store.addTodo()
+                _ = editorSession.beginNewTodo(store: store)
             } label: {
                 Image(systemName: "plus")
                     .imageScale(.medium)
@@ -135,6 +125,7 @@ struct MainWindowView: View {
             .buttonStyle(CyberHeaderIconButtonStyle())
 
             Button {
+                guard editorSession.resolveUnsavedChanges(store: store) else { return }
                 mainSectionVisibility.toggle()
             } label: {
                 Image(systemName: "sidebar.trailing")
@@ -165,6 +156,53 @@ struct MainWindowView: View {
             Rectangle()
                 .fill(CyberpunkTheme.rowDivider)
                 .frame(height: 1)
+        }
+    }
+}
+
+/// Blocks window close while the todo form has unsaved edits.
+private struct WindowUnsavedChangesGuard: NSViewRepresentable {
+    let session: TodoEditorSession
+    let store: TodoStore
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(session: session, store: store)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.attach(to: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.session = session
+        context.coordinator.store = store
+    }
+
+    final class Coordinator: NSObject, NSWindowDelegate {
+        var session: TodoEditorSession
+        var store: TodoStore
+        private weak var window: NSWindow?
+
+        init(session: TodoEditorSession, store: TodoStore) {
+            self.session = session
+            self.store = store
+        }
+
+        func attach(to view: NSView) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = view.window else { return }
+                if self.window !== window {
+                    self.window?.delegate = nil
+                    self.window = window
+                    window.delegate = self
+                }
+            }
+        }
+
+        func windowShouldClose(_ sender: NSWindow) -> Bool {
+            session.confirmQuit(store: store)
         }
     }
 }
