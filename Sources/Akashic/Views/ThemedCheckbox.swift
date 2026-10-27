@@ -11,7 +11,7 @@ struct ThemedCheckboxToggleStyle: ToggleStyle {
             accent: accent,
             labelFont: labelFont,
             subtitleFont: subtitleFont,
-            label: configuration.label,
+            label: { configuration.label },
             toggle: { configuration.isOn.toggle() }
         )
     }
