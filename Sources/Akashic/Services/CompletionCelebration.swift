@@ -10,4 +10,8 @@ enum CompletionCelebration {
     static func shouldCelebrateSuccessfulSave(saveResult: TodoFormSaveResult?) -> Bool {
         saveResult != nil
     }
+
+    static func shouldCelebrateSuccessfulNoteSave(saveResult: NoteFormSaveResult?) -> Bool {
+        saveResult != nil
+    }
 }

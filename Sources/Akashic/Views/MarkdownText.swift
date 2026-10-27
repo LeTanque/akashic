@@ -17,7 +17,7 @@ enum MarkdownRenderer {
         from markdown: String,
         basePointSize: CGFloat = AkashicFont.body
     ) -> AttributedString {
-        let source = normalizeSmartTypography(markdown)
+        let source = protectLiteralWhitespace(normalizeSmartTypography(markdown))
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .full
         options.failurePolicy = .returnPartiallyParsedIfPossible
@@ -29,7 +29,81 @@ enum MarkdownRenderer {
         }
         var visible = materializeBlockPresentation(parsed, basePointSize: basePointSize)
         emphasizeInlineCode(&visible)
+        applyVisibleSpacePreservation(to: &visible)
         return visible
+    }
+
+    /// CommonMark collapses runs of spaces in paragraphs; protect intentional spacing before parse.
+    static func protectLiteralWhitespace(_ markdown: String) -> String {
+        var output: [String] = []
+        var inFence = false
+        for lineSub in markdown.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let line = String(lineSub)
+            let trimmedFence = line.trimmingCharacters(in: .whitespaces)
+            if inFence {
+                output.append(line)
+                if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") {
+                    inFence = false
+                }
+                continue
+            }
+            if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") {
+                inFence = true
+                output.append(line)
+                continue
+            }
+            output.append(transformLinePreservingSpaces(line))
+        }
+        return output.joined(separator: "\n")
+    }
+
+    private static func transformLinePreservingSpaces(_ line: String) -> String {
+        var chars = Array(line)
+        var index = 0
+        while index < chars.count, chars[index] == " " {
+            chars[index] = "\u{00A0}"
+            index += 1
+        }
+        var i = index
+        while i < chars.count {
+            if chars[i] == " " {
+                var run = 1
+                var j = i + 1
+                while j < chars.count, chars[j] == " " {
+                    run += 1
+                    j += 1
+                }
+                if run >= 2 {
+                    for k in i..<j {
+                        chars[k] = "\u{00A0}"
+                    }
+                }
+                i = j
+            } else {
+                i += 1
+            }
+        }
+        return String(chars)
+    }
+
+    /// SwiftUI `Text` collapses regular spaces between styled runs; NBSP keeps layout faithful.
+    private static func applyVisibleSpacePreservation(to attributed: inout AttributedString) {
+        var rebuilt = AttributedString()
+        for run in attributed.runs {
+            var fragment = AttributedString(attributed[run.range])
+            let plain = String(fragment.characters)
+            if plain.contains(" ") {
+                fragment = AttributedString(plain.replacingOccurrences(of: " ", with: "\u{00A0}"))
+            }
+            if let font = run.font { fragment.font = font }
+            if let fg = run.foregroundColor { fragment.foregroundColor = fg }
+            if let bg = run.backgroundColor { fragment.backgroundColor = bg }
+            if let intent = run.inlinePresentationIntent { fragment.inlinePresentationIntent = intent }
+            if let link = run.link { fragment.link = link }
+            if let presentation = run.presentationIntent { fragment.presentationIntent = presentation }
+            rebuilt += fragment
+        }
+        attributed = rebuilt
     }
 
     /// macOS smart dash turns a typed `- ` into `– ` / `— `, which is not a
