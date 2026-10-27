@@ -6,12 +6,12 @@ protocol UnsavedChangesAlertPresenting {
     func present(todoDisplayName: String) -> UnsavedChangesChoice
 }
 
-/// Akashic-styled replacement for the old `NSAlert` unsaved-changes prompt.
+/// Akashic-styled replacement for the old native unsaved-changes alert.
 ///
 /// The panel content is plain AppKit on purpose. The guard runs synchronously from inside
 /// SwiftUI gesture/button actions (row click, New Todo), and a nested `runModal` started there
 /// cannot deliver clicks or key shortcuts to SwiftUI views hosted in the modal panel; the panel
-/// froze. AppKit controls (like `NSAlert`'s) keep working in that nested modal loop.
+/// ignored clicks. AppKit controls (like the native alert's) keep working in that nested modal loop.
 @MainActor
 struct UnsavedChangesAlertPresenter: UnsavedChangesAlertPresenting {
     static func present(todoDisplayName: String) -> UnsavedChangesChoice {
