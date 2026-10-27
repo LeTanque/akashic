@@ -4,7 +4,9 @@ import AppKit
 @main
 struct AkashicApp: App {
     @StateObject private var store = TodoStore()
+    @StateObject private var noteStore = NoteStore()
     @StateObject private var editorSession = TodoEditorSession()
+    @StateObject private var noteEditorSession = NoteEditorSession()
     @StateObject private var textZoom = TextZoomStore()
     @StateObject private var sidebarVisibility = SidebarVisibilityStore()
     @StateObject private var mainSectionVisibility = MainSectionVisibilityStore()
@@ -21,7 +23,9 @@ struct AkashicApp: App {
                 .environmentObject(settings)
                 .background(AppDelegateBinding(
                     store: store,
+                    noteStore: noteStore,
                     editorSession: editorSession,
+                    noteEditorSession: noteEditorSession,
                     settings: settings,
                     appDelegate: appDelegate
                 ))
@@ -37,7 +41,9 @@ struct AkashicApp: App {
         Window("Akashic", id: "main") {
             MainWindowView()
                 .environmentObject(store)
+                .environmentObject(noteStore)
                 .environmentObject(editorSession)
+                .environmentObject(noteEditorSession)
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
@@ -46,7 +52,9 @@ struct AkashicApp: App {
                 .background(LaunchOpenMainWindow())
                 .background(AppDelegateBinding(
                     store: store,
+                    noteStore: noteStore,
                     editorSession: editorSession,
+                    noteEditorSession: noteEditorSession,
                     settings: settings,
                     appDelegate: appDelegate
                 ))
@@ -147,11 +155,21 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     private let settingsController = AkashicSettingsWindowController()
     private var openSettingsObserver: NSObjectProtocol?
     private weak var store: TodoStore?
+    private weak var noteStore: NoteStore?
     private weak var editorSession: TodoEditorSession?
+    private weak var noteEditorSession: NoteEditorSession?
 
-    func bind(store: TodoStore, editorSession: TodoEditorSession, settings: AkashicSettingsStore) {
+    func bind(
+        store: TodoStore,
+        noteStore: NoteStore,
+        editorSession: TodoEditorSession,
+        noteEditorSession: NoteEditorSession,
+        settings: AkashicSettingsStore
+    ) {
         self.store = store
+        self.noteStore = noteStore
         self.editorSession = editorSession
+        self.noteEditorSession = noteEditorSession
         settingsController.configure(store: store, settings: settings)
         settings.applyActivationPolicyAtLaunch()
     }
@@ -182,14 +200,17 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let store, let editorSession else { return .terminateNow }
-        return editorSession.confirmQuit(store: store) ? .terminateNow : .terminateCancel
+        guard let store, let noteStore, let editorSession, let noteEditorSession else { return .terminateNow }
+        guard editorSession.confirmQuit(store: store) else { return .terminateCancel }
+        return noteEditorSession.confirmQuit(store: noteStore) ? .terminateNow : .terminateCancel
     }
 }
 
 private struct AppDelegateBinding: View {
     let store: TodoStore
+    let noteStore: NoteStore
     let editorSession: TodoEditorSession
+    let noteEditorSession: NoteEditorSession
     let settings: AkashicSettingsStore
     let appDelegate: AkashicAppDelegate
 
@@ -197,7 +218,13 @@ private struct AppDelegateBinding: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear {
-                appDelegate.bind(store: store, editorSession: editorSession, settings: settings)
+                appDelegate.bind(
+                    store: store,
+                    noteStore: noteStore,
+                    editorSession: editorSession,
+                    noteEditorSession: noteEditorSession,
+                    settings: settings
+                )
             }
     }
 }

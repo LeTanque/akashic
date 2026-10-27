@@ -56,6 +56,38 @@ enum TodoDatabase {
                 )
             }
         }
+        migrator.registerMigration("createNotes") { db in
+            try db.create(table: NoteItem.databaseTableName) { t in
+                t.column(NoteItem.Columns.id.name, .text).primaryKey()
+                t.column(NoteItem.Columns.title.name, .text).notNull()
+                t.column(NoteItem.Columns.body.name, .text).notNull().defaults(to: "")
+                t.column(NoteItem.Columns.createdAt.name, .datetime).notNull()
+                t.column(NoteItem.Columns.updatedAt.name, .datetime).notNull()
+            }
+            try db.create(table: TagRecord.databaseTableName) { t in
+                t.column(TagRecord.Columns.nameKey.name, .text).primaryKey()
+                t.column(TagRecord.Columns.displayName.name, .text).notNull()
+                t.column(TagRecord.Columns.color.name, .text).notNull()
+                    .defaults(to: AkashicTagColor.defaultForNewTag.rawValue)
+            }
+            try db.create(table: NoteTagLinkRow.databaseTableName) { t in
+                t.column(NoteTagLinkRow.Columns.noteID.name, .text)
+                    .notNull()
+                    .references(NoteItem.databaseTableName, onDelete: .cascade)
+                t.column(NoteTagLinkRow.Columns.tagNameKey.name, .text)
+                    .notNull()
+                    .references(TagRecord.databaseTableName, onDelete: .cascade)
+                t.primaryKey([
+                    NoteTagLinkRow.Columns.noteID.name,
+                    NoteTagLinkRow.Columns.tagNameKey.name,
+                ])
+            }
+            try db.create(
+                index: "idx_note_tags_tag_name_key",
+                on: NoteTagLinkRow.databaseTableName,
+                columns: [NoteTagLinkRow.Columns.tagNameKey.name]
+            )
+        }
         return migrator
     }
 }

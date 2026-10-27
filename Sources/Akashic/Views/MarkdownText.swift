@@ -17,7 +17,7 @@ enum MarkdownRenderer {
         from markdown: String,
         basePointSize: CGFloat = AkashicFont.body
     ) -> AttributedString {
-        let source = normalizeSmartTypography(markdown)
+        let source = protectLiteralWhitespace(normalizeSmartTypography(markdown))
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .full
         options.failurePolicy = .returnPartiallyParsedIfPossible
@@ -30,6 +30,77 @@ enum MarkdownRenderer {
         var visible = materializeBlockPresentation(parsed, basePointSize: basePointSize)
         emphasizeInlineCode(&visible)
         return visible
+    }
+
+    /// CommonMark collapses runs of spaces in paragraphs; protect intentional spacing before parse.
+    static func protectLiteralWhitespace(_ markdown: String) -> String {
+        var output: [String] = []
+        var inFence = false
+        for lineSub in markdown.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let line = String(lineSub)
+            let trimmedFence = line.trimmingCharacters(in: .whitespaces)
+            if inFence {
+                output.append(line)
+                if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") {
+                    inFence = false
+                }
+                continue
+            }
+            if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") {
+                inFence = true
+                output.append(line)
+                continue
+            }
+            output.append(transformLinePreservingSpaces(line))
+        }
+        return output.joined(separator: "\n")
+    }
+
+    private static func startsWithBlockMarker(_ rest: ArraySlice<Character>) -> Bool {
+        guard let first = rest.first else { return false }
+        let afterFirst = rest.dropFirst().first
+        if "-*+".contains(first) || first == "\u{2013}" || first == "\u{2014}" {
+            return afterFirst == " "
+        }
+        if first == ">" { return true }
+        if first.isNumber {
+            let digits = rest.prefix { $0.isNumber }
+            let next = rest.dropFirst(digits.count)
+            return (next.first == "." || next.first == ")") && next.dropFirst().first == " "
+        }
+        return false
+    }
+
+    private static func transformLinePreservingSpaces(_ line: String) -> String {
+        var chars = Array(line)
+        var index = 0
+        while index < chars.count, chars[index] == " " {
+            index += 1
+        }
+        // Indented list items and quotes are structural (nesting); only protect plain-text indent.
+        if !startsWithBlockMarker(chars[index...]) {
+            for k in 0..<index { chars[k] = "\u{00A0}" }
+        }
+        var i = index
+        while i < chars.count {
+            if chars[i] == " " {
+                var run = 1
+                var j = i + 1
+                while j < chars.count, chars[j] == " " {
+                    run += 1
+                    j += 1
+                }
+                if run >= 2 {
+                    for k in i..<j {
+                        chars[k] = "\u{00A0}"
+                    }
+                }
+                i = j
+            } else {
+                i += 1
+            }
+        }
+        return String(chars)
     }
 
     /// macOS smart dash turns a typed `- ` into `– ` / `— `, which is not a

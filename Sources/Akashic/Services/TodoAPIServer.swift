@@ -8,7 +8,7 @@ final class TodoAPIServer: @unchecked Sendable {
 
     private var runTask: Task<Void, Never>?
 
-    func start(store: TodoStore) {
+    func start(store: TodoStore, noteStore: NoteStore) {
         guard runTask == nil else { return }
         let port = Self.port
         runTask = Task.detached(priority: .utility) {
@@ -18,7 +18,7 @@ final class TodoAPIServer: @unchecked Sendable {
                 return
             }
             let server = HTTPServer(address: address, logger: .disabled)
-            await Self.installRoutes(on: server, store: store)
+            await Self.installRoutes(on: server, store: store, noteStore: noteStore)
             do {
                 try await server.run()
             } catch {
@@ -32,7 +32,7 @@ final class TodoAPIServer: @unchecked Sendable {
         runTask = nil
     }
 
-    private static func installRoutes(on server: HTTPServer, store: TodoStore) async {
+    private static func installRoutes(on server: HTTPServer, store: TodoStore, noteStore: NoteStore) async {
         await server.appendRoute("GET /health") { _ in
             json(["status": "ok", "database": "connected", "app": "akashic"])
         }
@@ -122,6 +122,110 @@ final class TodoAPIServer: @unchecked Sendable {
             }
             return json(["error": "no agent metrics yet"], status: .notFound)
         }
+
+        await server.appendRoute("GET /api/notes") { _ in
+            let items = await MainActor.run { noteStore.notes.map(NoteAPIDTO.init) }
+            return json(["notes": items])
+        }
+
+        await server.appendRoute("GET /api/notes/:id") { request in
+            guard let idString = request.routeParameters["id"],
+                  let id = UUID(uuidString: idString) else {
+                return json(["error": "invalid id"], status: .badRequest)
+            }
+            let note = await MainActor.run { noteStore.note(id: id) }
+            guard let note else {
+                return json(["error": "not found"], status: .notFound)
+            }
+            return json(["note": NoteAPIDTO(note)])
+        }
+
+        await server.appendRoute("POST /api/notes") { request in
+            let bodyData = try await request.bodyData
+            guard let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+                return json(["error": "invalid JSON body"], status: .badRequest)
+            }
+            guard let titleRaw = object["title"] as? String else {
+                return json(["error": "title required"], status: .badRequest)
+            }
+            let trimmed = titleRaw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                return json(["error": "title required"], status: .badRequest)
+            }
+            let body = object["body"] as? String ?? ""
+            let tags = NoteTagAPIDecoding.decodeTags(from: object["tags"])
+            let draft = NoteItem.new(title: String(trimmed.prefix(200)), body: body, tags: tags)
+            let item = await MainActor.run {
+                noteStore.insertSavedNote(from: draft)
+            }
+            return json(["note": NoteAPIDTO(item)], status: .created)
+        }
+
+        await server.appendRoute("PATCH /api/notes/:id") { request in
+            guard let idString = request.routeParameters["id"],
+                  let id = UUID(uuidString: idString) else {
+                return json(["error": "invalid id"], status: .badRequest)
+            }
+            let bodyData = try await request.bodyData
+            guard let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
+                return json(["error": "invalid JSON body"], status: .badRequest)
+            }
+            let updated = await MainActor.run { () -> NoteItem? in
+                guard var note = noteStore.note(id: id) else { return nil }
+                if let title = object["title"] as? String {
+                    note.title = String(title.prefix(200))
+                }
+                if let body = object["body"] as? String {
+                    note.body = body
+                }
+                if object["tags"] != nil {
+                    note.tags = NoteTagAPIDecoding.decodeTags(from: object["tags"])
+                }
+                noteStore.update(note)
+                return noteStore.note(id: id)
+            }
+            guard let updated else {
+                return json(["error": "not found"], status: .notFound)
+            }
+            return json(["note": NoteAPIDTO(updated)])
+        }
+
+        await server.appendRoute("DELETE /api/notes/:id") { request in
+            guard let idString = request.routeParameters["id"],
+                  let id = UUID(uuidString: idString) else {
+                return json(["error": "invalid id"], status: .badRequest)
+            }
+            let ok = await MainActor.run { noteStore.delete(id: id) }
+            if ok {
+                return HTTPResponse(statusCode: .noContent)
+            }
+            return json(["error": "not found"], status: .notFound)
+        }
+
+        await server.appendRoute("GET /api/tags") { _ in
+            let tags = await MainActor.run { noteStore.allTagDefinitions().map(TagAPIDTO.init) }
+            return json(["tags": tags])
+        }
+
+        await server.appendRoute("PATCH /api/tags/:name") { request in
+            guard let nameRaw = request.routeParameters["name"] else {
+                return json(["error": "name required"], status: .badRequest)
+            }
+            let name = nameRaw.removingPercentEncoding ?? nameRaw
+            let bodyData = try await request.bodyData
+            guard let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any],
+                  let colorRaw = object["color"] as? String else {
+                return json(["error": "color required"], status: .badRequest)
+            }
+            let color = AkashicTagColor.validated(colorRaw)
+            let tag = await MainActor.run {
+                noteStore.setTagColor(name: name, color: color)
+            }
+            guard let tag else {
+                return json(["error": "invalid tag name"], status: .badRequest)
+            }
+            return json(["tag": TagAPIDTO(tag)])
+        }
     }
 
     private static func parseDate(_ raw: String) -> Date? {
@@ -165,7 +269,7 @@ private struct TodoAPIDTO: Encodable {
         completed_at = item.completedAt.map(Self.encodeDate)
     }
 
-    private static func encodeDate(_ date: Date) -> String {
+    fileprivate static func encodeDate(_ date: Date) -> String {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return iso.string(from: date)
@@ -176,6 +280,34 @@ private struct CreateTodoBody: Decodable {
     let title: String
     let description: String?
     let priority: String?
+}
+
+struct NoteAPIDTO: Encodable {
+    let id: String
+    let title: String
+    let body: String
+    let created_at: String
+    let updated_at: String
+    let tags: [TagAPIDTO]
+
+    init(_ item: NoteItem) {
+        id = item.id.uuidString
+        title = item.title
+        body = item.body
+        created_at = TodoAPIDTO.encodeDate(item.createdAt)
+        updated_at = TodoAPIDTO.encodeDate(item.updatedAt)
+        tags = item.tags.map(TagAPIDTO.init)
+    }
+}
+
+struct TagAPIDTO: Encodable {
+    let name: String
+    let color: String
+
+    init(_ tag: AkashicTag) {
+        name = tag.name
+        color = tag.color.rawValue
+    }
 }
 
 private struct PatchTodoBody: Decodable {

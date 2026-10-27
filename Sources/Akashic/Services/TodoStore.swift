@@ -12,7 +12,6 @@ final class TodoStore: ObservableObject {
     @Published private(set) var revealTodoInListID: UUID?
 
     private let db: DatabaseQueue
-    private let apiServer = TodoAPIServer()
 
     init() {
         db = (try? TodoDatabase.open()) ?? {
@@ -20,7 +19,6 @@ final class TodoStore: ObservableObject {
         }()
         refresh()
         runFirstLaunchSeedIfNeeded()
-        apiServer.start(store: self)
     }
 
     /// Empty in-memory store for tests. Does not seed or start the HTTP API.

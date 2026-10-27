@@ -4,6 +4,8 @@ import SwiftUI
 struct BorderCelebrationOverlay: View {
     var completionCelebrationID: UUID?
     var deletionCelebrationID: UUID?
+    var noteCompletionCelebrationID: UUID?
+    var noteDeletionCelebrationID: UUID?
 
     @State private var pulse: CGFloat = 0
     @State private var orangeMix: CGFloat = 0
@@ -25,7 +27,15 @@ struct BorderCelebrationOverlay: View {
             guard let newID, newID != playingCompletionID else { return }
             startCompletionPlayback(id: newID)
         }
+        .onChange(of: noteCompletionCelebrationID) { _, newID in
+            guard let newID, newID != playingCompletionID else { return }
+            startCompletionPlayback(id: newID)
+        }
         .onChange(of: deletionCelebrationID) { _, newID in
+            guard let newID, newID != playingDeletionID else { return }
+            startDeletionPlayback(id: newID)
+        }
+        .onChange(of: noteDeletionCelebrationID) { _, newID in
             guard let newID, newID != playingDeletionID else { return }
             startDeletionPlayback(id: newID)
         }
