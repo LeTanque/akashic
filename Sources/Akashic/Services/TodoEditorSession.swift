@@ -6,6 +6,14 @@ final class TodoEditorSession: ObservableObject {
     @Published private(set) var form = TodoFormModel.blank()
     @Published var requestTitleFocus: UUID?
     private var isHandlingNavigation = false
+    private let presentUnsavedChanges: @MainActor (_ todoDisplayName: String) -> UnsavedChangesChoice
+
+    init(
+        presentUnsavedChanges: @escaping @MainActor (_ todoDisplayName: String) -> UnsavedChangesChoice =
+            UnsavedChangesAlertPresenter.present
+    ) {
+        self.presentUnsavedChanges = presentUnsavedChanges
+    }
 
     func mutateForm(_ update: (inout TodoFormModel) -> Void) {
         update(&form)
@@ -64,7 +72,7 @@ final class TodoEditorSession: ObservableObject {
         case .allow:
             return true
         case .needsConfirmation:
-            switch AkashicUnsavedChangesConfirmations.confirm() {
+            switch presentUnsavedChanges(unsavedChangesTodoDisplayName()) {
             case .save:
                 guard save(store: store) else { return false }
                 return true
@@ -100,5 +108,11 @@ final class TodoEditorSession: ObservableObject {
         } else {
             form.draft.completedAt = nil
         }
+    }
+
+    private func unsavedChangesTodoDisplayName() -> String {
+        let trimmed = form.draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { return trimmed }
+        return form.isNew ? "New todo" : "Untitled"
     }
 }
