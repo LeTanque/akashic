@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum AkashicSettingsTab: String, CaseIterable, Identifiable {
@@ -212,18 +213,31 @@ struct AkashicSettingsView: View {
         .background(Color.black.opacity(0.35))
     }
 
+    /// Modal alerts/panels hand key status back to the main window when they close.
+    /// Settings is a normal-level window now, so bring it back in front explicitly.
+    private func refrontSettingsPanel() {
+        DispatchQueue.main.async {
+            NSApp.windows
+                .first { $0 is AkashicSettingsPanel && $0.isVisible }?
+                .makeKeyAndOrderFront(nil)
+        }
+    }
+
     private func importBundledSeed() {
+        defer { refrontSettingsPanel() }
         guard AkashicImportConfirmations.confirmReplaceWithBundledSeed() == .confirmed else { return }
         store.importSeedFromBundle(replaceExisting: true)
     }
 
     private func importJSON() {
+        defer { refrontSettingsPanel() }
         guard AkashicImportConfirmations.confirmReplaceWithJSONFile() == .confirmed else { return }
         guard let url = AkashicJSONImportPanel.pickFileURL() else { return }
         store.importSeedFromFile(url: url)
     }
 
     private func exportJSON() {
+        defer { refrontSettingsPanel() }
         guard let url = AkashicJSONExportPanel.pickSaveURL() else { return }
         do {
             let data = try store.exportSeedJSON()
