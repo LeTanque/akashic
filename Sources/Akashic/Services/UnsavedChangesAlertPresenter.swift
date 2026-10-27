@@ -6,6 +6,12 @@ protocol UnsavedChangesAlertPresenting {
     func present(todoDisplayName: String) -> UnsavedChangesChoice
 }
 
+/// Akashic-styled replacement for the old `NSAlert` unsaved-changes prompt.
+///
+/// The panel content is plain AppKit on purpose. The guard runs synchronously from inside
+/// SwiftUI gesture/button actions (row click, New Todo), and a nested `runModal` started there
+/// cannot deliver clicks or key shortcuts to SwiftUI views hosted in the modal panel; the panel
+/// froze. AppKit controls (like `NSAlert`'s) keep working in that nested modal loop.
 @MainActor
 struct UnsavedChangesAlertPresenter: UnsavedChangesAlertPresenting {
     static func present(todoDisplayName: String) -> UnsavedChangesChoice {
@@ -13,38 +19,22 @@ struct UnsavedChangesAlertPresenter: UnsavedChangesAlertPresenting {
     }
 
     func present(todoDisplayName: String) -> UnsavedChangesChoice {
-        let state = ModalChoiceState()
         let panelSize = NSSize(width: 440, height: 210)
         let origin = Self.panelOrigin(for: panelSize)
-
-        let root = UnsavedChangesAlertView(todoDisplayName: todoDisplayName) { choice in
-            state.choice = choice
-            NSApp.stopModal(withCode: .OK)
-        }
-
-        let panel = UnsavedChangesAlertPanel(rootView: root, size: panelSize, origin: origin)
-        state.panel = panel
-
-        let escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard panel.isKeyWindow else { return event }
-            if event.keyCode == 53 {
-                state.choice = .cancel
-                NSApp.stopModal(withCode: .OK)
-                return nil
-            }
-            return event
-        }
+        let panel = UnsavedChangesAlertPanel(
+            todoDisplayName: todoDisplayName,
+            size: panelSize,
+            origin: origin
+        )
 
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        panel.makeFirstResponder(panel.saveButton)
         NSApp.runModal(for: panel)
 
-        if let escapeMonitor {
-            NSEvent.removeMonitor(escapeMonitor)
-        }
         panel.orderOut(nil)
         Self.refrontMainWindow()
-        return state.choice
+        return panel.choice
     }
 
     private static func panelOrigin(for size: NSSize) -> NSPoint {
@@ -74,17 +64,27 @@ struct UnsavedChangesAlertPresenter: UnsavedChangesAlertPresenting {
     }
 }
 
-@MainActor
-private final class ModalChoiceState {
-    var choice: UnsavedChangesChoice = .cancel
-    weak var panel: UnsavedChangesAlertPanel?
+private enum UnsavedAlertStyle {
+    static let accent = NSColor(AkashicSettingsChrome.accent)
+    static let label = NSColor(white: 0.56, alpha: 1)
+    static let discard = NSColor(CyberpunkTheme.neonOrange)
+    static let band = NSColor(calibratedWhite: 0, alpha: 0.35)
+
+    static func font(_ size: CGFloat, bold: Bool = false) -> NSFont {
+        let name = bold ? "Menlo-Bold" : "Menlo-Regular"
+        return NSFont(name: name, size: size)
+            ?? NSFont.monospacedSystemFont(ofSize: size, weight: bold ? .bold : .regular)
+    }
 }
 
 private final class UnsavedChangesAlertPanel: NSPanel {
+    private(set) var choice: UnsavedChangesChoice = .cancel
+    private(set) var saveButton: UnsavedAlertButton!
+
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    init(rootView: some View, size: NSSize, origin: NSPoint) {
+    init(todoDisplayName: String, size: NSSize, origin: NSPoint) {
         super.init(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
@@ -104,162 +104,223 @@ private final class UnsavedChangesAlertPanel: NSPanel {
         effect.material = .underWindowBackground
         effect.blendingMode = .behindWindow
         effect.state = .active
+        effect.appearance = NSAppearance(named: .darkAqua)
         effect.wantsLayer = true
 
-        let tint = NSView(frame: effect.bounds)
-        tint.wantsLayer = true
-        tint.autoresizingMask = [.width, .height]
-        tint.layer?.backgroundColor = NSColor(calibratedWhite: 0, alpha: 0.55).cgColor
-        effect.addSubview(tint)
-
-        let hosting = NSHostingView(rootView: rootView)
-        hosting.frame = effect.bounds
-        hosting.autoresizingMask = [.width, .height]
-        effect.addSubview(hosting)
-
+        let content = UnsavedAlertContentView(frame: effect.bounds)
+        content.autoresizingMask = [.width, .height]
+        effect.addSubview(content)
         contentView = effect
+
+        buildContent(in: content, todoDisplayName: todoDisplayName)
+    }
+
+    private func buildContent(in content: NSView, todoDisplayName: String) {
+        let width = content.bounds.width
+        let height = content.bounds.height
+        let inset: CGFloat = 16
+
+        // Header band (content view is flipped: y grows downward).
+        let header = UnsavedAlertBandView(frame: NSRect(x: 0, y: 0, width: width, height: 40))
+        content.addSubview(header)
+        let title = Self.label(
+            "UNSAVED CHANGES",
+            font: UnsavedAlertStyle.font(13, bold: true),
+            color: .white,
+            kern: 1.4
+        )
+        title.frame = NSRect(x: inset, y: 11, width: width - inset * 2 - 20, height: 18)
+        header.addSubview(title)
+
+        let message = Self.label(
+            "Save your changes to \"\(todoDisplayName)\" before continuing?",
+            font: UnsavedAlertStyle.font(11),
+            color: UnsavedAlertStyle.label
+        )
+        message.maximumNumberOfLines = 3
+        message.lineBreakMode = .byTruncatingTail
+        message.cell?.wraps = true
+        message.frame = NSRect(x: inset, y: 54, width: width - inset * 2, height: 46)
+        content.addSubview(message)
+
+        // Footer band.
+        let footerHeight: CGFloat = 28
+        let footer = UnsavedAlertBandView(
+            frame: NSRect(x: 0, y: height - footerHeight, width: width, height: footerHeight)
+        )
+        content.addSubview(footer)
+        let hint = Self.label(
+            "RETURN TO SAVE  ·  ESC TO CANCEL  ·  TAB TO MOVE",
+            font: UnsavedAlertStyle.font(9),
+            color: UnsavedAlertStyle.label
+        )
+        hint.frame = NSRect(x: inset, y: 8, width: width - inset * 2, height: 13)
+        footer.addSubview(hint)
+
+        // Buttons, right-aligned: CANCEL  DISCARD  SAVE.
+        let cancel = UnsavedAlertButton(title: "CANCEL", accent: UnsavedAlertStyle.label)
+        let discard = UnsavedAlertButton(title: "DISCARD", accent: UnsavedAlertStyle.discard)
+        let save = UnsavedAlertButton(title: "SAVE", accent: UnsavedAlertStyle.accent)
+        cancel.keyEquivalent = "\u{1b}"
+        save.keyEquivalent = "\r"
+        cancel.target = self
+        cancel.action = #selector(chooseCancel(_:))
+        discard.target = self
+        discard.action = #selector(chooseDiscard(_:))
+        save.target = self
+        save.action = #selector(chooseSave(_:))
+
+        let buttonHeight: CGFloat = 26
+        let buttonY = height - footerHeight - 10 - buttonHeight
+        var x = width - inset
+        for button in [save, discard, cancel] {
+            let buttonWidth = button.intrinsicContentSize.width
+            x -= buttonWidth
+            button.frame = NSRect(x: x, y: buttonY, width: buttonWidth, height: buttonHeight)
+            content.addSubview(button)
+            x -= 10
+        }
+        cancel.nextKeyView = discard
+        discard.nextKeyView = save
+        save.nextKeyView = cancel
+        initialFirstResponder = save
+        saveButton = save
+
+        let outline = UnsavedAlertOutlineView(frame: content.bounds)
+        outline.autoresizingMask = [.width, .height]
+        content.addSubview(outline)
+    }
+
+    private static func label(
+        _ text: String,
+        font: NSFont,
+        color: NSColor,
+        kern: CGFloat = 0
+    ) -> NSTextField {
+        let field = NSTextField(labelWithString: text)
+        var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        if kern != 0 { attributes[.kern] = kern }
+        field.attributedStringValue = NSAttributedString(string: text, attributes: attributes)
+        field.isSelectable = false
+        return field
+    }
+
+    private func finish(with choice: UnsavedChangesChoice) {
+        self.choice = choice
+        NSApp.stopModal(withCode: .OK)
+    }
+
+    @objc private func chooseCancel(_ sender: Any?) { finish(with: .cancel) }
+    @objc private func chooseDiscard(_ sender: Any?) { finish(with: .discard) }
+    @objc private func chooseSave(_ sender: Any?) { finish(with: .save) }
+
+    override func cancelOperation(_ sender: Any?) {
+        finish(with: .cancel)
     }
 }
 
-private struct UnsavedChangesAlertView: View {
-    let todoDisplayName: String
-    let onChoice: (UnsavedChangesChoice) -> Void
+/// Flipped container so layout reads top-down; tinted like the settings panel.
+private final class UnsavedAlertContentView: NSView {
+    override var isFlipped: Bool { true }
 
-    @FocusState private var focusedAction: AlertAction?
-
-    private enum AlertAction: Hashable {
-        case save
-        case discard
-        case cancel
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor(calibratedWhite: 0, alpha: 0.62).cgColor
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            messageBlock
-            Spacer(minLength: 0)
-            buttonRow
-            footer
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.12))
-        .overlay {
-            AkashicChamferedOutline(chamfer: AkashicSettingsChrome.windowChamfer)
-                .stroke(AkashicSettingsChrome.accent.opacity(0.85), lineWidth: 1.5)
-        }
-        .preferredColorScheme(.dark)
-        .onAppear {
-            focusedAction = .save
-        }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
+private final class UnsavedAlertBandView: NSView {
+    override var isFlipped: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = UnsavedAlertStyle.band.cgColor
     }
 
-    private var header: some View {
-        HStack {
-            Text("UNSAVED CHANGES")
-                .font(AkashicSettingsChrome.font(13, bold: true))
-                .tracking(1.4)
-                .foregroundStyle(Color.white)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.black.opacity(0.35))
-    }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
 
-    private var messageBlock: some View {
-        Text("Save your changes to \"\(todoDisplayName)\" before continuing?")
-            .font(AkashicSettingsChrome.font(11))
-            .foregroundStyle(AkashicSettingsChrome.label)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 8)
-    }
+/// Cyan chamfered outline matching the settings window (cut at the top-right corner).
+private final class UnsavedAlertOutlineView: NSView {
+    override var isFlipped: Bool { true }
 
-    private var buttonRow: some View {
-        HStack(spacing: 10) {
-            Spacer()
-            UnsavedChangesThemedButton(
-                title: "CANCEL",
-                accent: AkashicSettingsChrome.label,
-                action: { onChoice(.cancel) }
-            )
-            .focused($focusedAction, equals: .cancel)
-            .akashicSettingsFocusRing()
-            .keyboardShortcut(.cancelAction)
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-            UnsavedChangesThemedButton(
-                title: "DISCARD",
-                accent: CyberpunkTheme.neonOrange,
-                action: { onChoice(.discard) }
-            )
-            .focused($focusedAction, equals: .discard)
-            .akashicSettingsFocusRing()
-
-            UnsavedChangesThemedButton(
-                title: "SAVE",
-                accent: AkashicSettingsChrome.accent,
-                action: { onChoice(.save) }
-            )
-            .focused($focusedAction, equals: .save)
-            .akashicSettingsFocusRing()
-            .keyboardShortcut(.defaultAction)
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-    }
-
-    private var footer: some View {
-        HStack {
-            Text("RETURN TO SAVE  ·  ESC TO CANCEL  ·  TAB TO MOVE")
-                .font(AkashicSettingsChrome.font(9))
-                .foregroundStyle(AkashicSettingsChrome.label)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color.black.opacity(0.35))
+    override func draw(_ dirtyRect: NSRect) {
+        let rect = bounds.insetBy(dx: 0.75, dy: 0.75)
+        let cut = min(AkashicSettingsChrome.windowChamfer, min(rect.width, rect.height) / 2)
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX - cut, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.minY + cut))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY))
+        path.line(to: NSPoint(x: rect.minX, y: rect.maxY))
+        path.close()
+        path.lineWidth = 1.5
+        UnsavedAlertStyle.accent.withAlphaComponent(0.85).setStroke()
+        path.stroke()
     }
 }
 
-private struct UnsavedChangesThemedButton: View {
-    let title: String
-    let accent: Color
-    let action: () -> Void
-    @State private var hovering = false
+/// Squared, outlined, monospaced button in the Akashic style. Always takes keyboard focus so
+/// Tab moves between the three choices and Space activates the focused one.
+private final class UnsavedAlertButton: NSButton {
+    private let accent: NSColor
+    private var hovering = false { didSet { updateAppearance() } }
 
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(AkashicSettingsChrome.font(11, bold: true))
-                .foregroundStyle(accent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(Rectangle().fill(Color.black.opacity(hovering ? 0.5 : 0.35)))
-                .overlay(
-                    Rectangle()
-                        .stroke(accent.opacity(hovering ? 1 : 0.55), lineWidth: 1)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+    init(title: String, accent: NSColor) {
+        self.accent = accent
+        super.init(frame: .zero)
+        isBordered = false
+        bezelStyle = .regularSquare
+        setButtonType(.momentaryChange)
+        wantsLayer = true
+        layer?.borderWidth = 1
+        focusRingType = .exterior
+        attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [
+                .font: UnsavedAlertStyle.font(11, bold: true),
+                .foregroundColor: accent,
+            ]
+        )
+        updateAppearance()
     }
-}
 
-private struct AkashicChamferedOutline: Shape {
-    var chamfer: CGFloat
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func path(in rect: CGRect) -> Path {
-        let cut = min(chamfer, min(rect.width, rect.height) / 2)
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
+    override var intrinsicContentSize: NSSize {
+        let textWidth = attributedTitle.size().width
+        return NSSize(width: ceil(textWidth) + 24, height: 26)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+    override var canBecomeKeyView: Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(
+            NSTrackingArea(
+                rect: bounds,
+                options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                owner: self
+            )
+        )
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
+    private func updateAppearance() {
+        layer?.backgroundColor = NSColor(calibratedWhite: 0, alpha: hovering ? 0.5 : 0.35).cgColor
+        layer?.borderColor = accent.withAlphaComponent(hovering ? 1 : 0.55).cgColor
     }
 }
