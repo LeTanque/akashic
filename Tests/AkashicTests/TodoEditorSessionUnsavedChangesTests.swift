@@ -103,7 +103,8 @@ final class TodoEditorSessionUnsavedChangesTests: XCTestCase {
         XCTAssertTrue(source.contains("UNSAVED CHANGES"))
         XCTAssertTrue(source.contains("NSApp.runModal(for: panel)"))
         XCTAssertTrue(source.contains("CyberpunkTheme.neonOrange"))
-        XCTAssertTrue(source.contains("akashicSettingsFocusRing()"))
+        XCTAssertTrue(source.contains("save.keyEquivalent = \"\\r\""))
+        XCTAssertTrue(source.contains("cancel.keyEquivalent = \"\\u{1b}\""))
         XCTAssertFalse(source.contains("NSAlert"))
     }
 }
