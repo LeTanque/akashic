@@ -81,6 +81,7 @@ struct TodoFormModel: Equatable {
         savedBaseline = baseline
     }
 
+    @MainActor
     @discardableResult
     mutating func save(into store: TodoStore) -> TodoFormSaveResult? {
         guard canSave else { return nil }
