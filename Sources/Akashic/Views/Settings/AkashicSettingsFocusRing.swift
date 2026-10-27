@@ -3,11 +3,14 @@ import SwiftUI
 private struct AkashicSettingsFocusRingModifier: ViewModifier {
     var inset: CGFloat = 2
 
-    @Environment(\.isFocused) private var isFocused
+    /// `@Environment(\.isFocused)` read here reflects the *ancestor* of the control, so it never
+    /// turns true for the wrapped button; bind the control's own focus instead.
+    @FocusState private var isFocused: Bool
 
     func body(content: Content) -> some View {
         content
             .focusEffectDisabled()
+            .focused($isFocused)
             .overlay {
                 if isFocused {
                     Rectangle()
