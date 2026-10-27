@@ -44,7 +44,7 @@ struct TodoRowView: View {
                 MarkdownText(
                     markdown: todo.description,
                     pointSize: AkashicFont.caption,
-                    foreground: CyberpunkTheme.completedShaded.opacity(0.9),
+                    foreground: CyberpunkTheme.activeTodoDescription,
                     completed: todo.completed
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,7 +60,7 @@ struct TodoRowView: View {
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                     Text("Created \(todo.createdOn.formatted(date: .abbreviated, time: .shortened))")
                         .font(AkashicFont.mono(AkashicFont.caption2, zoom: textZoom))
-                        .foregroundStyle(CyberpunkTheme.completedShaded)
+                        .foregroundStyle(CyberpunkTheme.readableMutedCyan)
                 }
             }
         }

@@ -106,7 +106,7 @@ struct ThemedDueDatePicker: View {
             Text("Pending: \(savedLine(draft.pending))")
         }
         .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
-        .foregroundStyle(CyberpunkTheme.completedShaded)
+        .foregroundStyle(CyberpunkTheme.dueDatePickerMutedText)
     }
 
     private func savedLine(_ date: Date?) -> String {
@@ -142,7 +142,7 @@ struct ThemedDueDatePicker: View {
             .foregroundStyle(CyberpunkTheme.neonCyan)
             .frame(width: 28, height: 24)
             .background(Rectangle().fill(Color.black.opacity(0.35)))
-            .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.5), lineWidth: 1))
+            .overlay(Rectangle().stroke(CyberpunkTheme.dueDatePickerInactiveBorder, lineWidth: 1))
     }
 
     private var weekdayHeader: some View {
@@ -151,7 +151,7 @@ struct ThemedDueDatePicker: View {
             ForEach(symbols, id: \.self) { symbol in
                 Text(symbol.uppercased())
                     .font(AkashicFont.mono(AkashicFont.micro, zoom: textZoom))
-                    .foregroundStyle(CyberpunkTheme.completedShaded)
+                    .foregroundStyle(CyberpunkTheme.dueDatePickerMutedText)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -198,7 +198,7 @@ struct ThemedDueDatePicker: View {
                     Rectangle().stroke(
                         today && !selected
                             ? CyberpunkTheme.neonCyan.opacity(0.9)
-                            : CyberpunkTheme.neonCyan.opacity(selected ? 1 : 0.25),
+                            : CyberpunkTheme.dueDatePickerInactiveBorder,
                         lineWidth: today && !selected ? 1.5 : 1
                     )
                 )
@@ -212,7 +212,7 @@ struct ThemedDueDatePicker: View {
         HStack(spacing: 8) {
             Text("Time")
                 .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
-                .foregroundStyle(CyberpunkTheme.completedShaded)
+                .foregroundStyle(CyberpunkTheme.dueDatePickerMutedText)
             Spacer()
             if Self.uses24HourClock {
                 timeStepper(label: "Hour", value: hourBinding, range: 0 ... 23)
@@ -225,7 +225,7 @@ struct ThemedDueDatePicker: View {
                         .foregroundStyle(CyberpunkTheme.neonCyan)
                         .frame(width: 36, height: 36)
                         .background(Rectangle().fill(Color.black.opacity(0.35)))
-                        .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.45), lineWidth: 1))
+                        .overlay(Rectangle().stroke(CyberpunkTheme.dueDatePickerInactiveBorder, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .focusable(false)
@@ -250,7 +250,7 @@ struct ThemedDueDatePicker: View {
             VStack(spacing: 0) {
                 Text(label)
                     .font(AkashicFont.mono(AkashicFont.micro, zoom: textZoom))
-                    .foregroundStyle(CyberpunkTheme.completedShaded)
+                    .foregroundStyle(CyberpunkTheme.dueDatePickerMutedText)
                 Text(String(format: "%02d", value.wrappedValue))
                     .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
                     .foregroundStyle(CyberpunkTheme.neonCyan)
@@ -271,7 +271,7 @@ struct ThemedDueDatePicker: View {
         }
         .padding(4)
         .background(Rectangle().fill(Color.black.opacity(0.35)))
-        .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.45), lineWidth: 1))
+        .overlay(Rectangle().stroke(CyberpunkTheme.dueDatePickerInactiveBorder, lineWidth: 1))
     }
 
     private func toggleMeridiem() {

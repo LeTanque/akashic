@@ -1,7 +1,15 @@
 import SwiftUI
 
+enum ThemedCheckboxMetrics {
+    /// Settings panel row glyph.
+    static let settings: CGFloat = 18
+    /// Editor “Complete by” row (~73% of the 22pt list completion checkbox).
+    static let completeByEditor: CGFloat = 16
+}
+
 struct ThemedCheckboxToggleStyle: ToggleStyle {
     var accent: Color = CyberpunkTheme.neonCyan
+    var checkboxSize: CGFloat = ThemedCheckboxMetrics.settings
     var labelFont: Font = AkashicSettingsChrome.font(11, bold: true)
     var subtitleFont: Font = AkashicSettingsChrome.font(9)
 
@@ -9,6 +17,7 @@ struct ThemedCheckboxToggleStyle: ToggleStyle {
         ThemedCheckboxRow(
             isOn: configuration.isOn,
             accent: accent,
+            checkboxSize: checkboxSize,
             labelFont: labelFont,
             subtitleFont: subtitleFont,
             label: { configuration.label },
@@ -20,6 +29,7 @@ struct ThemedCheckboxToggleStyle: ToggleStyle {
 struct ThemedCheckboxRow<Label: View>: View {
     let isOn: Bool
     var accent: Color = CyberpunkTheme.neonCyan
+    var checkboxSize: CGFloat = ThemedCheckboxMetrics.settings
     var labelFont: Font = AkashicSettingsChrome.font(11, bold: true)
     var subtitleFont: Font = AkashicSettingsChrome.font(9)
     @ViewBuilder var label: () -> Label
@@ -52,11 +62,11 @@ struct ThemedCheckboxRow<Label: View>: View {
                 )
             if isOn {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.system(size: checkboxSize * (11.0 / 18.0), weight: .bold))
                     .foregroundStyle(Color.black)
             }
         }
-        .frame(width: 18, height: 18)
+        .frame(width: checkboxSize, height: checkboxSize)
         .shadow(color: accent.opacity(isHovered ? 0.45 : 0.25), radius: isHovered ? 5 : 3)
     }
 
@@ -77,8 +87,9 @@ struct ThemedCheckboxRow<Label: View>: View {
 
 extension View {
     func themedCheckboxToggleStyle(
-        accent: Color = CyberpunkTheme.neonCyan
+        accent: Color = CyberpunkTheme.neonCyan,
+        checkboxSize: CGFloat = ThemedCheckboxMetrics.settings
     ) -> some View {
-        toggleStyle(ThemedCheckboxToggleStyle(accent: accent))
+        toggleStyle(ThemedCheckboxToggleStyle(accent: accent, checkboxSize: checkboxSize))
     }
 }

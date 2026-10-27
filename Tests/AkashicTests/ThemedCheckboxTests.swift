@@ -11,6 +11,29 @@ final class ThemedCheckboxTests: XCTestCase {
         XCTAssertFalse(source.contains(".toggleStyle(.checkbox)"))
     }
 
+    func testTodoEditorCompleteByUsesSmallerThemedCheckbox() throws {
+        let source = try String(
+            contentsOf: sourceRoot().appendingPathComponent("Sources/Akashic/Views/TodoEditorView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("themedCheckboxToggleStyle(checkboxSize: ThemedCheckboxMetrics.completeByEditor)"))
+        XCTAssertTrue(source.contains("accessibilityLabel(\"Complete by\")"))
+    }
+
+    func testSettingsFocusUsesThemedRing() throws {
+        let focusRing = try String(
+            contentsOf: sourceRoot().appendingPathComponent("Sources/Akashic/Views/Settings/AkashicSettingsFocusRing.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(focusRing.contains("focusEffectDisabled()"))
+
+        let settings = try String(
+            contentsOf: settingsViewSource(),
+            encoding: .utf8
+        )
+        XCTAssertTrue(settings.contains("akashicSettingsFocusRing()"))
+    }
+
     func testTodoEditorUsesThemedDueDatePickerNotNativeDatePicker() throws {
         let source = try String(
             contentsOf: sourceRoot().appendingPathComponent("Sources/Akashic/Views/TodoEditorView.swift"),

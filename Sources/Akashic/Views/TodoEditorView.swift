@@ -71,7 +71,7 @@ struct TodoEditorView: View {
             LabeledContent("Created") {
                 Text(draft.createdOn.formatted(date: .complete, time: .shortened))
                     .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
-                    .foregroundStyle(CyberpunkTheme.completedShaded)
+                    .foregroundStyle(CyberpunkTheme.readableMutedCyan)
             }
 
             LabeledContent("Priority") {
@@ -86,8 +86,14 @@ struct TodoEditorView: View {
             .foregroundStyle(CyberpunkTheme.priorityColor(draft.priority))
             .onChange(of: draft.priority) { _, _ in commitIfChanged() }
 
-            Toggle("Complete by", isOn: $hasCompleteBy)
-                .onChange(of: hasCompleteBy) { _, enabled in
+            Toggle(isOn: $hasCompleteBy) {
+                Text("Complete by")
+                    .font(AkashicFont.mono(AkashicFont.callout, zoom: textZoom))
+                    .foregroundStyle(CyberpunkTheme.neonCyan)
+            }
+            .themedCheckboxToggleStyle(checkboxSize: ThemedCheckboxMetrics.completeByEditor)
+            .accessibilityLabel("Complete by")
+            .onChange(of: hasCompleteBy) { _, enabled in
                     if !enabled {
                         draft.completeBy = nil
                         commitIfChanged()

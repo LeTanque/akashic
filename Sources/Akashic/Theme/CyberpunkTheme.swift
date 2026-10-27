@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import SwiftUI
 
 enum CyberpunkTheme {
@@ -6,6 +7,14 @@ enum CyberpunkTheme {
     static let neonCyan = Color(red: 0, green: 217 / 255, blue: 1)
     /// Completed text / button hover fill / low priority (`#18484e`).
     static let completedShaded = Color(red: 24 / 255, green: 72 / 255, blue: 78 / 255)
+    /// Readable muted cyan on `background` / dark panels — metadata, due-date labels (`#3d96a4`).
+    static let readableMutedCyan = Color(red: 61 / 255, green: 150 / 255, blue: 164 / 255)
+    /// Incomplete todo description in the sidebar list (same hue as `readableMutedCyan`).
+    static let activeTodoDescription = readableMutedCyan
+    /// Secondary labels and weekday headers in the due-date picker panel.
+    static let dueDatePickerMutedText = readableMutedCyan
+    /// Inactive cell / stepper borders in the due-date picker (brighter than low-opacity neon).
+    static let dueDatePickerInactiveBorder = readableMutedCyan
     /// High priority accent — neon orange on black (`#ff7a1a`).
     static let neonOrange = Color(red: 1, green: 122 / 255, blue: 26 / 255)
     /// Row dividers (`#333333`).
@@ -48,6 +57,39 @@ enum CyberpunkTheme {
             neonCyan
         case .low:
             completedShaded
+        }
+    }
+
+    // MARK: - Contrast (unit tests)
+
+    enum ContrastMetrics {
+        static let panelBackgroundSRGB = (r: 0.0, g: 0.0, b: 0.0)
+        static let completedShadedSRGB = (r: 24.0 / 255.0, g: 72.0 / 255.0, b: 78.0 / 255.0)
+        static let readableMutedCyanSRGB = (r: 61.0 / 255.0, g: 150.0 / 255.0, b: 164.0 / 255.0)
+        static let minimumReadableContrastRatio = 4.5
+
+        static func wcagContrastRatio(
+            foreground: (r: Double, g: Double, b: Double),
+            background: (r: Double, g: Double, b: Double)
+        ) -> Double {
+            let l1 = relativeLuminance(foreground)
+            let l2 = relativeLuminance(background)
+            let lighter = max(l1, l2)
+            let darker = min(l1, l2)
+            return (lighter + 0.05) / (darker + 0.05)
+        }
+
+        private static func relativeLuminance(_ srgb: (r: Double, g: Double, b: Double)) -> Double {
+            func channel(_ value: Double) -> Double {
+                if value <= 0.03928 {
+                    return value / 12.92
+                }
+                return pow((value + 0.055) / 1.055, 2.4)
+            }
+            let r = channel(srgb.r)
+            let g = channel(srgb.g)
+            let b = channel(srgb.b)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
         }
     }
 }
