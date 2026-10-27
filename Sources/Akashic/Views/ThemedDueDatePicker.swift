@@ -42,6 +42,9 @@ struct ThemedDueDatePicker: View {
             .onHover { isTriggerHovered = $0 }
             .accessibilityLabel("Due date")
             .background {
+                // Panel content is a separate NSPanel hosting tree; read the draft state here
+                // so body re-runs and the anchor re-presents the panel when it changes.
+                let _ = (draft, displayedMonth)
                 BorderlessFloatingPanelAnchor(isPresented: $isOpen) {
                     pickerPanel
                 }
@@ -80,7 +83,7 @@ struct ThemedDueDatePicker: View {
             actionRow
         }
         .padding(12)
-        .frame(width: 280)
+        .frame(width: 320)
         .background(Color.black.opacity(0.94))
         .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.75), lineWidth: 1))
         .preferredColorScheme(.dark)
@@ -156,12 +159,19 @@ struct ThemedDueDatePicker: View {
 
     private var dayGrid: some View {
         let days = monthGrid(for: displayedMonth)
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
-            ForEach(days, id: \.self) { day in
-                if let day {
-                    dayCell(day)
-                } else {
-                    Color.clear.frame(height: 28)
+        let weeks = stride(from: 0, to: days.count, by: 7).map { Array(days[$0 ..< min($0 + 7, days.count)]) }
+        // Non-lazy rows: LazyVGrid cells inside the panel's hosting view could keep a stale
+        // selection highlight after the pending day changed.
+        return VStack(spacing: 2) {
+            ForEach(weeks.indices, id: \.self) { row in
+                HStack(spacing: 2) {
+                    ForEach(0 ..< 7, id: \.self) { column in
+                        if column < weeks[row].count, let day = weeks[row][column] {
+                            dayCell(day)
+                        } else {
+                            Color.clear.frame(maxWidth: .infinity, minHeight: 28)
+                        }
+                    }
                 }
             }
         }
@@ -276,21 +286,29 @@ struct ThemedDueDatePicker: View {
 
     private var actionRow: some View {
         HStack(spacing: 8) {
-            Button("Clear") {
+            Button {
                 draft.clearPending()
+            } label: {
+                Text("Clear").lineLimit(1).fixedSize()
             }
             .buttonStyle(CyberBorderedButtonStyle())
             .help("Remove due date when saved")
 
             Spacer()
 
-            Button("Cancel") {
+            Button {
                 cancelPicker()
+            } label: {
+                Text("Cancel").lineLimit(1).fixedSize()
             }
             .buttonStyle(CyberBorderedButtonStyle())
 
-            Button("SAVE DUE DATE") {
+            Button {
                 saveDueDate()
+            } label: {
+                Text("SAVE DUE DATE")
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .buttonStyle(CyberBorderedButtonStyle())
             .disabled(!draft.hasChanges)

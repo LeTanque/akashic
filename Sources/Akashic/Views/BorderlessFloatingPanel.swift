@@ -19,6 +19,12 @@ final class BorderlessFloatingPanelController {
         let root = AnyView(content())
         if let panel, let hostingView {
             hostingView.rootView = root
+            // Content can change height (e.g. 5- vs 6-row months); keep the panel fitted.
+            let fitting = hostingView.fittingSize
+            let size = NSSize(width: max(fitting.width, 160), height: max(fitting.height, 40))
+            if panel.frame.size != size {
+                panel.setContentSize(size)
+            }
             repositionPanel()
             return
         }
