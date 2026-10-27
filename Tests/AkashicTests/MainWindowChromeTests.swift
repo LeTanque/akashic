@@ -229,6 +229,62 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertTrue(panelSource.contains(".borderless"))
         XCTAssertTrue(panelSource.contains("AkashicSettingsChamferedEffectView"))
         XCTAssertTrue(panelSource.contains("isMovableByWindowBackground = true"))
+        XCTAssertTrue(panelSource.contains("level = .normal"))
+        XCTAssertFalse(panelSource.contains("level = .floating"))
+        XCTAssertTrue(panelSource.contains("panel.isKeyWindow"))
+    }
+
+    func testMainWindowOmitsImportExportStatusFooter() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/Akashic/Views/MainWindowView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("lastImportMessage"))
+    }
+
+    func testImportExportStatusLivesInSettingsTab() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/Akashic/Views/Settings/AkashicSettingsView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("store.lastImportMessage"))
+    }
+
+    func testScrollSurfacesInstallThemedScrollers() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let list = try String(contentsOf: root.appendingPathComponent("Sources/Akashic/Views/TodoListContent.swift"), encoding: .utf8)
+        let editor = try String(contentsOf: root.appendingPathComponent("Sources/Akashic/Views/TodoEditorView.swift"), encoding: .utf8)
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/Settings/AkashicSettingsView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(list.contains(".akashicScrollers()"))
+        XCTAssertTrue(editor.contains(".akashicScrollers()"))
+        XCTAssertTrue(settings.contains(".akashicScrollers()"))
+    }
+
+    func testAppAppliesDockActivationPolicyFromSettings() throws {
+        let appSource = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/Akashic/AkashicApp.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(appSource.contains("applyActivationPolicyAtLaunch()"))
+        XCTAssertTrue(appSource.contains("applicationShouldHandleReopen"))
     }
 
     func testMenuBarExtraUsesDynamicSettingsSymbol() throws {

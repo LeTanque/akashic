@@ -15,20 +15,11 @@ struct TodoEditorView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Title (markdown)")
+                    Text("Title")
                         .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                     HStack(alignment: .top, spacing: 8) {
-                        MarkdownLiveEditor(
-                            text: $draft.title,
-                            onCommit: commitIfChanged,
-                            sourceAccessibilityLabel: "Title markdown source",
-                            sourceFontSize: AkashicFont.body,
-                            sourceMinHeight: 56,
-                            previewMinHeight: 48,
-                            previewPointSize: AkashicFont.body,
-                            previewWeight: .semibold
-                        )
+                        PlainTitleField(text: $draft.title, onCommit: commitIfChanged)
 
                         CompletionCheckbox(
                             completed: draft.completed,
@@ -58,6 +49,7 @@ struct TodoEditorView: View {
             }
             .padding(20)
         }
+        .akashicScrollers()
         .background(Color.clear)
         .onChange(of: store.selectedTodoID) { _, _ in
             if let todo = store.selectedTodo {
@@ -83,15 +75,13 @@ struct TodoEditorView: View {
             }
 
             LabeledContent("Priority") {
-                Picker("", selection: $draft.priority) {
-                    ForEach(TodoPriority.allCases, id: \.self) { p in
-                        Text(p.label)
-                            .foregroundStyle(CyberpunkTheme.priorityColor(p))
-                            .tag(p)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
+                ThemedDropdown(
+                    accessibilityTitle: "Priority",
+                    selection: $draft.priority,
+                    options: Array(TodoPriority.allCases),
+                    label: { $0.label },
+                    accent: { CyberpunkTheme.priorityColor($0) }
+                )
             }
             .foregroundStyle(CyberpunkTheme.priorityColor(draft.priority))
             .onChange(of: draft.priority) { _, _ in commitIfChanged() }

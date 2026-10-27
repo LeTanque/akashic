@@ -9,6 +9,7 @@ final class AkashicSettingsStore: ObservableObject {
     private static let menuBarSymbolKey = "akashic.settings.menuBarSymbol"
     private static let showSystemInformationKey = "akashic.settings.showSystemInformation"
     private static let showAkashicLogoKey = "akashic.settings.showAkashicLogo"
+    private static let showInDockKey = "akashic.settings.showInDockAndAppSwitcher"
 
     /// SF Symbol names offered in Settings → Appearance.
     static let menuBarSymbolChoices: [String] = [
@@ -47,6 +48,17 @@ final class AkashicSettingsStore: ObservableObject {
         }
     }
 
+    /// When true, shows Dock icon and Cmd-Tab entry (`.regular` activation policy).
+    @Published var showInDockAndAppSwitcher: Bool {
+        didSet {
+            defaults.set(showInDockAndAppSwitcher, forKey: Self.showInDockKey)
+            AkashicActivationPolicy.apply(showInDockAndAppSwitcher: showInDockAndAppSwitcher)
+            if !showInDockAndAppSwitcher {
+                NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
+            }
+        }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -68,6 +80,16 @@ final class AkashicSettingsStore: ObservableObject {
         } else {
             showAkashicLogo = defaults.bool(forKey: Self.showAkashicLogoKey)
         }
+
+        if defaults.object(forKey: Self.showInDockKey) == nil {
+            showInDockAndAppSwitcher = false
+        } else {
+            showInDockAndAppSwitcher = defaults.bool(forKey: Self.showInDockKey)
+        }
+    }
+
+    func applyActivationPolicyAtLaunch() {
+        AkashicActivationPolicy.apply(showInDockAndAppSwitcher: showInDockAndAppSwitcher)
     }
 
     static func normalizedSymbol(_ name: String) -> String {

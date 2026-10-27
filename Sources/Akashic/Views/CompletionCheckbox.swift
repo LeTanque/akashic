@@ -22,6 +22,11 @@ struct CompletionCheckbox: View {
         style == .list ? 22 : nil
     }
 
+    /// List rows keep cyan completion; editor block uses deletion orange when complete.
+    private var completedAccent: Color {
+        style == .editorBlock ? CyberpunkTheme.neonOrange : CyberpunkTheme.neonCyan
+    }
+
     var body: some View {
         Button(action: action) {
             ZStack {
@@ -50,7 +55,7 @@ struct CompletionCheckbox: View {
 
     private var fillColor: Color {
         if completed {
-            return CyberpunkTheme.neonOrange
+            return completedAccent
         }
         if isHovered {
             return CyberpunkTheme.completedShaded.opacity(0.35)
@@ -59,7 +64,7 @@ struct CompletionCheckbox: View {
     }
 
     private var borderColor: Color {
-        let accent = completed ? CyberpunkTheme.neonOrange : CyberpunkTheme.neonCyan
+        let accent = completed ? completedAccent : CyberpunkTheme.neonCyan
         if isHovered {
             return accent
         }
@@ -67,7 +72,7 @@ struct CompletionCheckbox: View {
     }
 
     private var shadowColor: Color {
-        let accent = completed ? CyberpunkTheme.neonOrange : CyberpunkTheme.neonCyan
+        let accent = completed ? completedAccent : CyberpunkTheme.neonCyan
         let base = accent.opacity(completed ? 0.35 : 0.45)
         if isHovered {
             return accent.opacity(0.55)

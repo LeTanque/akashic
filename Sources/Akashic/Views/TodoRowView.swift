@@ -31,8 +31,8 @@ struct TodoRowView: View {
 
     private var rowText: some View {
         VStack(alignment: .leading, spacing: compact ? 2 : 4) {
-            MarkdownText(
-                markdown: todo.title.isEmpty ? "Untitled" : todo.title,
+            TodoTitleText(
+                title: todo.title,
                 pointSize: compact ? AkashicFont.callout : AkashicFont.body,
                 weight: .semibold,
                 foreground: CyberpunkTheme.neonCyan,

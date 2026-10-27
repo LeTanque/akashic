@@ -22,6 +22,7 @@ struct AkashicSettingsView: View {
                 tabContent
                     .padding(14)
             }
+            .akashicScrollers()
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,6 +107,11 @@ struct AkashicSettingsView: View {
                 subtitle: "Wildstyle wordmark in the center header slot",
                 isOn: $settings.showAkashicLogo
             )
+            toggleRow(
+                title: "Show in Dock and app switcher",
+                subtitle: "Dock icon and Cmd-Tab entry (macOS ties switcher to Dock presence)",
+                isOn: $settings.showInDockAndAppSwitcher
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -160,6 +166,13 @@ struct AkashicSettingsView: View {
                 .font(AkashicSettingsChrome.font(10))
                 .foregroundStyle(AkashicSettingsChrome.label)
             AkashicSettingsButton(title: "EXPORT TO JSON…", action: exportJSON)
+
+            if let message = store.lastImportMessage {
+                Text(message)
+                    .font(AkashicSettingsChrome.font(10))
+                    .foregroundStyle(AkashicSettingsChrome.accent)
+                    .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -215,7 +228,7 @@ struct AkashicSettingsView: View {
         do {
             let data = try store.exportSeedJSON()
             try data.write(to: url, options: .atomic)
-            store.lastImportMessage = "Exported to \(url.lastPathComponent)."
+            store.lastImportMessage = "Exported \(store.todos.count) todos to \(url.lastPathComponent)."
         } catch {
             store.lastImportMessage = "Export failed: \(error.localizedDescription)"
         }

@@ -2,15 +2,16 @@ import XCTest
 @testable import Akashic
 
 final class CompletionCheckboxTests: XCTestCase {
-    func testCompletedStateUsesDeletionOrangeToken() throws {
+    func testListCompletionUsesCyanEditorBlockUsesOrange() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Sources/Akashic/Views/CompletionCheckbox.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertTrue(source.contains("if completed"))
-        XCTAssertTrue(source.contains("CyberpunkTheme.neonOrange"))
-        XCTAssertFalse(source.contains("return CyberpunkTheme.neonCyan\n        }\n        if isHovered"))
+        XCTAssertTrue(source.contains("case editorBlock"))
+        XCTAssertTrue(source.contains("completedAccent"))
+        XCTAssertTrue(source.contains("style == .editorBlock ? CyberpunkTheme.neonOrange : CyberpunkTheme.neonCyan"))
+        XCTAssertTrue(source.contains("style == .list"))
     }
 }

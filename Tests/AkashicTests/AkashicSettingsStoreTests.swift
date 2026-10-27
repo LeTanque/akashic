@@ -25,6 +25,7 @@ final class AkashicSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.menuBarSymbolName, AkashicSettingsStore.defaultMenuBarSymbol)
         XCTAssertTrue(store.showSystemInformation)
         XCTAssertTrue(store.showAkashicLogo)
+        XCTAssertFalse(store.showInDockAndAppSwitcher)
     }
 
     func testPersistenceRoundTrip() {
@@ -32,11 +33,13 @@ final class AkashicSettingsStoreTests: XCTestCase {
         store.menuBarSymbolName = "bolt.fill"
         store.showSystemInformation = false
         store.showAkashicLogo = false
+        store.showInDockAndAppSwitcher = true
 
         let reloaded = AkashicSettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.menuBarSymbolName, "bolt.fill")
         XCTAssertFalse(reloaded.showSystemInformation)
         XCTAssertFalse(reloaded.showAkashicLogo)
+        XCTAssertTrue(reloaded.showInDockAndAppSwitcher)
     }
 
     func testUnknownMenuBarSymbolFallsBackToSparkles() {

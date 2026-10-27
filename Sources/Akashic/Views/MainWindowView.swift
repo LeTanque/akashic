@@ -52,21 +52,6 @@ struct MainWindowView: View {
                 store.selectedTodoID = store.todos.first?.id
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if let message = store.lastImportMessage {
-                Text(message)
-                    .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
-                    .foregroundStyle(CyberpunkTheme.neonCyan)
-                    .frame(maxWidth: .infinity)
-                    .padding(8)
-                    .background(Color.black.opacity(0.35))
-                    .overlay(alignment: .top) {
-                        Rectangle()
-                            .fill(CyberpunkTheme.neonCyan)
-                            .frame(height: 1)
-                    }
-            }
-        }
     }
 
     private var showsMatrixRain: Bool {
@@ -165,13 +150,12 @@ struct MainWindowView: View {
             Text(">")
                 .font(AkashicFont.mono(AkashicFont.caption, weight: .bold, zoom: textZoom))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
-            Picker("Filter", selection: $listFilter) {
-                ForEach(TodoListFilter.allCases) { filter in
-                    Text(filter.rawValue).tag(filter)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
+            ThemedDropdown(
+                accessibilityTitle: "Filter",
+                selection: $listFilter,
+                options: Array(TodoListFilter.allCases),
+                label: { $0.rawValue }
+            )
             Spacer()
         }
         .padding(.horizontal, 12)
