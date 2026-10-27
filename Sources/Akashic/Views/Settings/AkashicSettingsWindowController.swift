@@ -43,6 +43,7 @@ final class AkashicSettingsWindowController: NSObject {
 
         escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.keyCode == 53 else { return event }
+            guard let panel = self?.panel, panel.isKeyWindow else { return event }
             self?.dismiss()
             return nil
         }
@@ -78,7 +79,7 @@ final class AkashicSettingsPanel: NSPanel {
         isMovableByWindowBackground = true
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
-        level = .floating
+        level = .normal
         collectionBehavior = [.canJoinAllSpaces]
         minSize = AkashicSettingsChrome.minimumSize
 

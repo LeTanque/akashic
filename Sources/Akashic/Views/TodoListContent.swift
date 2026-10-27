@@ -44,6 +44,7 @@ struct TodoListContent: View {
                 }
             }
             .listStyle(.plain)
+            .akashicScrollers()
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 1)
             .onChange(of: store.revealTodoInListID) { _, id in

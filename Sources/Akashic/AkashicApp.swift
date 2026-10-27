@@ -129,6 +129,7 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
 
     func bind(store: TodoStore, settings: AkashicSettingsStore) {
         settingsController.configure(store: store, settings: settings)
+        settings.applyActivationPolicyAtLaunch()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

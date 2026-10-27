@@ -157,7 +157,7 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(source, "Keep **this** source")
     }
 
-    func testTitleEditorUsesLiveMarkdownSourceNotSwiftUITextEditor() throws {
+    func testDescriptionEditorStillUsesLiveMarkdownNotSwiftUITextEditor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -171,10 +171,10 @@ final class MarkdownRendererTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertFalse(
-            editor.contains("TextEditor(text: $draft.title)"),
+            editor.contains("TextEditor(text: $draft.description)"),
             "SwiftUI TextEditor applies smart dashes that break CommonMark `- ` lists"
         )
-        XCTAssertTrue(editor.contains("Title markdown source"))
+        XCTAssertTrue(editor.contains("Description markdown source"))
         XCTAssertTrue(editor.contains("MarkdownLiveEditor"))
         XCTAssertTrue(live.contains("isAutomaticDashSubstitutionEnabled = false"))
         XCTAssertTrue(live.contains("isAutomaticQuoteSubstitutionEnabled = false"))

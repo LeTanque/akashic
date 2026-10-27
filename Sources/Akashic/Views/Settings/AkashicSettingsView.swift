@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum AkashicSettingsTab: String, CaseIterable, Identifiable {
@@ -22,6 +23,7 @@ struct AkashicSettingsView: View {
                 tabContent
                     .padding(14)
             }
+            .akashicScrollers()
             footer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -106,6 +108,11 @@ struct AkashicSettingsView: View {
                 subtitle: "Wildstyle wordmark in the center header slot",
                 isOn: $settings.showAkashicLogo
             )
+            toggleRow(
+                title: "Show in Dock and app switcher",
+                subtitle: "Dock icon and Cmd-Tab entry (macOS ties switcher to Dock presence)",
+                isOn: $settings.showInDockAndAppSwitcher
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -160,6 +167,13 @@ struct AkashicSettingsView: View {
                 .font(AkashicSettingsChrome.font(10))
                 .foregroundStyle(AkashicSettingsChrome.label)
             AkashicSettingsButton(title: "EXPORT TO JSON…", action: exportJSON)
+
+            if let message = store.lastImportMessage {
+                Text(message)
+                    .font(AkashicSettingsChrome.font(10))
+                    .foregroundStyle(AkashicSettingsChrome.accent)
+                    .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -199,23 +213,36 @@ struct AkashicSettingsView: View {
         .background(Color.black.opacity(0.35))
     }
 
+    /// Modal alerts/panels hand key status back to the main window when they close.
+    /// Settings is a normal-level window now, so bring it back in front explicitly.
+    private func refrontSettingsPanel() {
+        DispatchQueue.main.async {
+            NSApp.windows
+                .first { $0 is AkashicSettingsPanel && $0.isVisible }?
+                .makeKeyAndOrderFront(nil)
+        }
+    }
+
     private func importBundledSeed() {
+        defer { refrontSettingsPanel() }
         guard AkashicImportConfirmations.confirmReplaceWithBundledSeed() == .confirmed else { return }
         store.importSeedFromBundle(replaceExisting: true)
     }
 
     private func importJSON() {
+        defer { refrontSettingsPanel() }
         guard AkashicImportConfirmations.confirmReplaceWithJSONFile() == .confirmed else { return }
         guard let url = AkashicJSONImportPanel.pickFileURL() else { return }
         store.importSeedFromFile(url: url)
     }
 
     private func exportJSON() {
+        defer { refrontSettingsPanel() }
         guard let url = AkashicJSONExportPanel.pickSaveURL() else { return }
         do {
             let data = try store.exportSeedJSON()
             try data.write(to: url, options: .atomic)
-            store.lastImportMessage = "Exported to \(url.lastPathComponent)."
+            store.lastImportMessage = "Exported \(store.todos.count) todos to \(url.lastPathComponent)."
         } catch {
             store.lastImportMessage = "Export failed: \(error.localizedDescription)"
         }

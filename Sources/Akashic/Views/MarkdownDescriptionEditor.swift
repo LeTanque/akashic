@@ -99,6 +99,7 @@ struct MarkdownSourceEditor: NSViewRepresentable {
         configureChrome(textView)
         applyTypography(to: textView, force: true)
         context.coordinator.textView = textView
+        AkashicScrollViewPatcher.patch(scrollView)
         return scrollView
     }
 
