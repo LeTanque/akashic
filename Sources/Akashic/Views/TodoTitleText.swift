@@ -19,7 +19,6 @@ struct TodoTitleText: View {
             .font(AkashicFont.mono(pointSize, weight: weight, zoom: textZoom))
             .foregroundStyle(completed ? CyberpunkTheme.completedShaded : foreground)
             .strikethrough(completed, color: CyberpunkTheme.completedShaded)
-            .textSelection(.enabled)
     }
 }
 
