@@ -29,7 +29,6 @@ enum MarkdownRenderer {
         }
         var visible = materializeBlockPresentation(parsed, basePointSize: basePointSize)
         emphasizeInlineCode(&visible)
-        applyVisibleSpacePreservation(to: &visible)
         return visible
     }
 
@@ -57,12 +56,30 @@ enum MarkdownRenderer {
         return output.joined(separator: "\n")
     }
 
+    private static func startsWithBlockMarker(_ rest: ArraySlice<Character>) -> Bool {
+        guard let first = rest.first else { return false }
+        let afterFirst = rest.dropFirst().first
+        if "-*+".contains(first) || first == "\u{2013}" || first == "\u{2014}" {
+            return afterFirst == " "
+        }
+        if first == ">" { return true }
+        if first.isNumber {
+            let digits = rest.prefix { $0.isNumber }
+            let next = rest.dropFirst(digits.count)
+            return (next.first == "." || next.first == ")") && next.dropFirst().first == " "
+        }
+        return false
+    }
+
     private static func transformLinePreservingSpaces(_ line: String) -> String {
         var chars = Array(line)
         var index = 0
         while index < chars.count, chars[index] == " " {
-            chars[index] = "\u{00A0}"
             index += 1
+        }
+        // Indented list items and quotes are structural (nesting); only protect plain-text indent.
+        if !startsWithBlockMarker(chars[index...]) {
+            for k in 0..<index { chars[k] = "\u{00A0}" }
         }
         var i = index
         while i < chars.count {
@@ -84,26 +101,6 @@ enum MarkdownRenderer {
             }
         }
         return String(chars)
-    }
-
-    /// SwiftUI `Text` collapses regular spaces between styled runs; NBSP keeps layout faithful.
-    private static func applyVisibleSpacePreservation(to attributed: inout AttributedString) {
-        var rebuilt = AttributedString()
-        for run in attributed.runs {
-            var fragment = AttributedString(attributed[run.range])
-            let plain = String(fragment.characters)
-            if plain.contains(" ") {
-                fragment = AttributedString(plain.replacingOccurrences(of: " ", with: "\u{00A0}"))
-            }
-            if let font = run.font { fragment.font = font }
-            if let fg = run.foregroundColor { fragment.foregroundColor = fg }
-            if let bg = run.backgroundColor { fragment.backgroundColor = bg }
-            if let intent = run.inlinePresentationIntent { fragment.inlinePresentationIntent = intent }
-            if let link = run.link { fragment.link = link }
-            if let presentation = run.presentationIntent { fragment.presentationIntent = presentation }
-            rebuilt += fragment
-        }
-        attributed = rebuilt
     }
 
     /// macOS smart dash turns a typed `- ` into `– ` / `— `, which is not a
