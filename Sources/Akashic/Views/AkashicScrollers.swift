@@ -44,8 +44,11 @@ final class AkashicScroller: NSScroller {
     }
 
     override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {
-        NSColor.clear.setFill()
+        // Dark track matching the app chrome, with a faint cyan rail on the inner edge.
+        NSColor(white: 0, alpha: 0.35).setFill()
         slotRect.fill()
+        NSColor(srgbRed: 0, green: 217 / 255, blue: 1, alpha: 0.25).setFill()
+        NSRect(x: slotRect.minX, y: slotRect.minY, width: 1, height: slotRect.height).fill()
     }
 
     override func drawKnob() {
@@ -58,7 +61,7 @@ final class AkashicScroller: NSScroller {
 
         let outline = NSColor(srgbRed: 0, green: 217 / 255, blue: 1, alpha: 0.95)
         outline.setStroke()
-        let path = NSBezierPath(rect: knob)
+        let path = NSBezierPath(rect: knob.insetBy(dx: 0.5, dy: 0.5))
         path.lineWidth = 1
         path.stroke()
 
@@ -76,7 +79,7 @@ final class AkashicScroller: NSScroller {
 enum AkashicScrollViewPatcher {
     static func patch(_ scrollView: NSScrollView) {
         scrollView.scrollerStyle = .legacy
-        scrollView.autohidesScrollers = false
+        scrollView.autohidesScrollers = true // no empty track on fields whose content fits
         scrollView.hasVerticalScroller = true
         if let vertical = scrollView.verticalScroller, !(vertical is AkashicScroller) {
             let themed = AkashicScroller(frame: vertical.frame)
@@ -90,8 +93,10 @@ enum AkashicScrollViewPatcher {
         }
     }
 
+    /// Themes every scroll view under `root` that already shows a vertical scroller
+    /// (SwiftUI `List` / `ScrollView` backing views are siblings of the installer, not ancestors).
     static func patchHierarchy(root: NSView) {
-        if let scrollView = root as? NSScrollView {
+        if let scrollView = root as? NSScrollView, scrollView.hasVerticalScroller {
             patch(scrollView)
         }
         for subview in root.subviews {
@@ -100,21 +105,38 @@ enum AkashicScrollViewPatcher {
     }
 }
 
-private struct AkashicScrollerInstaller: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.wantsLayer = true
-        return view
+private final class AkashicScrollerInstallerView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        schedulePatch()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            if let scrollView = nsView.enclosingScrollView {
-                AkashicScrollViewPatcher.patch(scrollView)
-            } else if let host = nsView.superview {
-                AkashicScrollViewPatcher.patchHierarchy(root: host)
+    func schedulePatch() {
+        // SwiftUI builds its NSScrollView lazily; patch now and once more after layout settles.
+        for delay in [0.0, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.patch()
             }
         }
+    }
+
+    private func patch() {
+        if let scrollView = enclosingScrollView {
+            AkashicScrollViewPatcher.patch(scrollView)
+        }
+        if let root = window?.contentView {
+            AkashicScrollViewPatcher.patchHierarchy(root: root)
+        }
+    }
+}
+
+private struct AkashicScrollerInstaller: NSViewRepresentable {
+    func makeNSView(context: Context) -> AkashicScrollerInstallerView {
+        AkashicScrollerInstallerView(frame: .zero)
+    }
+
+    func updateNSView(_ nsView: AkashicScrollerInstallerView, context: Context) {
+        nsView.schedulePatch()
     }
 }
 
