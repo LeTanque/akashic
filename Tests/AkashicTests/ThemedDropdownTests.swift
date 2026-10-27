@@ -8,6 +8,15 @@ final class ThemedDropdownTests: XCTestCase {
         XCTAssertFalse(source.contains("pickerStyle(.menu)"))
     }
 
+    func testThemedDropdownUsesBorderlessPanelNotNativePopover() throws {
+        let source = try String(
+            contentsOf: sourceRoot().appendingPathComponent("Sources/Akashic/Views/ThemedDropdown.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("BorderlessFloatingPanelAnchor"))
+        XCTAssertFalse(source.contains(".popover("))
+    }
+
     func testPrioritySelectorUsesThemedDropdown() throws {
         let editor = try String(
             contentsOf: sourceRoot().appendingPathComponent("Sources/Akashic/Views/TodoEditorView.swift"),

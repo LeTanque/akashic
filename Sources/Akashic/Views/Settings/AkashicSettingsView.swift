@@ -196,8 +196,8 @@ struct AkashicSettingsView: View {
                     .foregroundStyle(AkashicSettingsChrome.label)
             }
         }
-        .toggleStyle(.checkbox)
-        .tint(AkashicSettingsChrome.accent)
+        .themedCheckboxToggleStyle(accent: AkashicSettingsChrome.accent)
+        .accessibilityLabel(title)
     }
 
     private var footer: some View {
