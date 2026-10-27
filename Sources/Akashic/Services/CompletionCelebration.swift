@@ -5,4 +5,9 @@ enum CompletionCelebration {
     static func shouldCelebrate(wasCompleted: Bool, nowCompleted: Bool) -> Bool {
         !wasCompleted && nowCompleted
     }
+
+    /// Fire the same breathing border effect after a todo form Save persists (new or updated).
+    static func shouldCelebrateSuccessfulSave(saveResult: TodoFormSaveResult?) -> Bool {
+        saveResult != nil
+    }
 }

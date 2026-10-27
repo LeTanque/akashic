@@ -4,6 +4,7 @@ import SwiftUI
 /// Standard `MenuBarExtra` menu items (native NSMenu appearance, no custom popover chrome).
 struct MenuBarMenuView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var editorSession: TodoEditorSession
     @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
     @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
     @Environment(\.openWindow) private var openWindow
@@ -14,7 +15,7 @@ struct MenuBarMenuView: View {
         }
 
         Button("New Todo") {
-            store.addTodo()
+            _ = editorSession.beginNewTodo(store: store)
             openMainWindow()
         }
         .keyboardShortcut("n", modifiers: .command)
@@ -47,9 +48,6 @@ struct MenuBarMenuView: View {
     }
 
     private func openMainWindow() {
-        if store.selectedTodoID == nil {
-            store.selectedTodoID = store.todos.first?.id
-        }
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
     }

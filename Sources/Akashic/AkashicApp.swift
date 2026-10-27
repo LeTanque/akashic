@@ -4,6 +4,7 @@ import AppKit
 @main
 struct AkashicApp: App {
     @StateObject private var store = TodoStore()
+    @StateObject private var editorSession = TodoEditorSession()
     @StateObject private var textZoom = TextZoomStore()
     @StateObject private var sidebarVisibility = SidebarVisibilityStore()
     @StateObject private var mainSectionVisibility = MainSectionVisibilityStore()
@@ -14,10 +15,16 @@ struct AkashicApp: App {
         MenuBarExtra {
             MenuBarMenuView()
                 .environmentObject(store)
+                .environmentObject(editorSession)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
                 .environmentObject(settings)
-                .background(AppDelegateBinding(store: store, settings: settings, appDelegate: appDelegate))
+                .background(AppDelegateBinding(
+                    store: store,
+                    editorSession: editorSession,
+                    settings: settings,
+                    appDelegate: appDelegate
+                ))
         } label: {
             Label("Akashic", systemImage: settings.menuBarSymbolName)
         }
@@ -30,13 +37,19 @@ struct AkashicApp: App {
         Window("Akashic", id: "main") {
             MainWindowView()
                 .environmentObject(store)
+                .environmentObject(editorSession)
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
                 .environmentObject(settings)
                 .akashicTextZoom(textZoom)
                 .background(LaunchOpenMainWindow())
-                .background(AppDelegateBinding(store: store, settings: settings, appDelegate: appDelegate))
+                .background(AppDelegateBinding(
+                    store: store,
+                    editorSession: editorSession,
+                    settings: settings,
+                    appDelegate: appDelegate
+                ))
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -48,10 +61,17 @@ struct AkashicApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Todo") {
-                    store.addTodo()
+                    _ = editorSession.beginNewTodo(store: store)
                     NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: .command)
+            }
+            CommandGroup(after: .saveItem) {
+                Button("Save Todo") {
+                    _ = editorSession.save(store: store)
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .disabled(!editorSession.form.canSave)
             }
             appMenuCommands
             viewCommands
@@ -126,8 +146,12 @@ extension Notification.Name {
 final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     private let settingsController = AkashicSettingsWindowController()
     private var openSettingsObserver: NSObjectProtocol?
+    private weak var store: TodoStore?
+    private weak var editorSession: TodoEditorSession?
 
-    func bind(store: TodoStore, settings: AkashicSettingsStore) {
+    func bind(store: TodoStore, editorSession: TodoEditorSession, settings: AkashicSettingsStore) {
+        self.store = store
+        self.editorSession = editorSession
         settingsController.configure(store: store, settings: settings)
         settings.applyActivationPolicyAtLaunch()
     }
@@ -156,10 +180,16 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
         return true
     }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let store, let editorSession else { return .terminateNow }
+        return editorSession.confirmQuit(store: store) ? .terminateNow : .terminateCancel
+    }
 }
 
 private struct AppDelegateBinding: View {
     let store: TodoStore
+    let editorSession: TodoEditorSession
     let settings: AkashicSettingsStore
     let appDelegate: AkashicAppDelegate
 
@@ -167,7 +197,7 @@ private struct AppDelegateBinding: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear {
-                appDelegate.bind(store: store, settings: settings)
+                appDelegate.bind(store: store, editorSession: editorSession, settings: settings)
             }
     }
 }

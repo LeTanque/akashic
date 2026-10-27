@@ -52,10 +52,15 @@ final class TodoStore: ObservableObject {
         sortTodosInMemory()
     }
 
-    func addTodo(title: String = "New todo") {
-        let item = insertNewTodo(title: title)
-        selectedTodoID = item.id
-        revealTodoInListID = item.id
+    /// Clears list selection so the editor shows an in-memory blank draft (no DB insert).
+    func beginNewTodoDraft() {
+        selectedTodoID = nil
+    }
+
+    /// Legacy name used by menus; opens a blank draft without persisting.
+    func addTodo(title: String = "") {
+        _ = title
+        beginNewTodoDraft()
     }
 
     @discardableResult
@@ -65,6 +70,19 @@ final class TodoStore: ObservableObject {
         priority: TodoPriority = .medium
     ) -> TodoItem {
         insertNewTodo(title: title, description: description, priority: priority)
+    }
+
+    /// Persists a new todo from the editor draft (single insert + order write).
+    @discardableResult
+    func insertSavedTodo(from draft: TodoItem) -> TodoItem {
+        insertNewTodo(
+            title: draft.title,
+            description: draft.description,
+            priority: draft.priority,
+            completeBy: draft.completeBy,
+            completed: draft.completed,
+            completedAt: draft.completedAt
+        )
     }
 
     func update(_ item: TodoItem) {
@@ -107,8 +125,17 @@ final class TodoStore: ObservableObject {
         }
         persist(item, bumpUpdatedAt: false)
         if CompletionCelebration.shouldCelebrate(wasCompleted: wasCompleted, nowCompleted: item.completed) {
-            completionCelebrationID = UUID()
+            triggerBreathingCelebration()
         }
+    }
+
+    /// Shared cyan border breathing effect (completion, successful todo Save, etc.).
+    func triggerBreathingCelebration() {
+        completionCelebrationID = UUID()
+    }
+
+    func revealTodoInList(_ id: UUID) {
+        revealTodoInListID = id
     }
 
     func todos(status: String) -> [TodoItem] {
@@ -141,7 +168,7 @@ final class TodoStore: ObservableObject {
             item.completed = completed
             item.completedAt = completed ? Date() : nil
             if CompletionCelebration.shouldCelebrate(wasCompleted: wasCompleted, nowCompleted: item.completed) {
-                completionCelebrationID = UUID()
+                triggerBreathingCelebration()
             }
         }
         persist(item, bumpUpdatedAt: true)
@@ -204,9 +231,15 @@ final class TodoStore: ObservableObject {
     private func insertNewTodo(
         title: String,
         description: String = "",
-        priority: TodoPriority = .medium
+        priority: TodoPriority = .medium,
+        completeBy: Date? = nil,
+        completed: Bool = false,
+        completedAt: Date? = nil
     ) -> TodoItem {
         var item = TodoItem.new(title: title, description: description, priority: priority)
+        item.completeBy = completeBy
+        item.completed = completed
+        item.completedAt = completed ? (completedAt ?? Date()) : nil
         item.updatedAt = Date()
         var list = todos
         let index = Self.insertionIndex(for: item.priority, in: list)
