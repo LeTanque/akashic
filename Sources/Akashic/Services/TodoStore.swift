@@ -181,6 +181,10 @@ final class TodoStore: ObservableObject {
         importSeedData(data, replaceExisting: true)
     }
 
+    func exportSeedJSON(source: String = "akashic export") throws -> Data {
+        try SeedExporter.encodeJSON(from: todos, source: source)
+    }
+
     private func importSeedData(_ data: Data, replaceExisting: Bool) {
         do {
             let items = try SeedImporter.parseSeedData(data)

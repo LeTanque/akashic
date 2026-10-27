@@ -7,17 +7,25 @@ struct AkashicApp: App {
     @StateObject private var textZoom = TextZoomStore()
     @StateObject private var sidebarVisibility = SidebarVisibilityStore()
     @StateObject private var mainSectionVisibility = MainSectionVisibilityStore()
+    @StateObject private var settings = AkashicSettingsStore()
     @NSApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Akashic", systemImage: "sparkles") {
+        MenuBarExtra {
             MenuBarMenuView()
                 .environmentObject(store)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
+                .environmentObject(settings)
+                .background(AppDelegateBinding(store: store, settings: settings, appDelegate: appDelegate))
+        } label: {
+            Label("Akashic", systemImage: settings.menuBarSymbolName)
         }
         .menuBarExtraStyle(.menu)
-        .commands { viewCommands }
+        .commands {
+            appMenuCommands
+            viewCommands
+        }
 
         Window("Akashic", id: "main") {
             MainWindowView()
@@ -25,8 +33,10 @@ struct AkashicApp: App {
                 .environmentObject(textZoom)
                 .environmentObject(sidebarVisibility)
                 .environmentObject(mainSectionVisibility)
+                .environmentObject(settings)
                 .akashicTextZoom(textZoom)
                 .background(LaunchOpenMainWindow())
+                .background(AppDelegateBinding(store: store, settings: settings, appDelegate: appDelegate))
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -43,7 +53,18 @@ struct AkashicApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            appMenuCommands
             viewCommands
+        }
+    }
+
+    @CommandsBuilder
+    private var appMenuCommands: some Commands {
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") {
+                NotificationCenter.default.post(name: .akashicOpenSettings, object: nil)
+            }
+            .keyboardShortcut(",", modifiers: .command)
         }
     }
 
@@ -102,7 +123,22 @@ extension Notification.Name {
 }
 
 final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
+    private let settingsController = AkashicSettingsWindowController()
+    private var openSettingsObserver: NSObjectProtocol?
+
+    func bind(store: TodoStore, settings: AkashicSettingsStore) {
+        settingsController.configure(store: store, settings: settings)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        openSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .akashicOpenSettings,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.settingsController.showSettings()
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -115,5 +151,19 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
         return true
+    }
+}
+
+private struct AppDelegateBinding: View {
+    let store: TodoStore
+    let settings: AkashicSettingsStore
+    let appDelegate: AkashicAppDelegate
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear {
+                appDelegate.bind(store: store, settings: settings)
+            }
     }
 }

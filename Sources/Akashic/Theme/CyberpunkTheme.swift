@@ -162,6 +162,7 @@ private struct AkashicHeaderWordmarkView: View {
 }
 
 struct CyberHeaderStrip<Trailing: View>: View {
+    @EnvironmentObject private var settings: AkashicSettingsStore
     @ViewBuilder var trailing: () -> Trailing
 
     init(@ViewBuilder trailing: @escaping () -> Trailing) {
@@ -170,22 +171,29 @@ struct CyberHeaderStrip<Trailing: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Wordmark is centered in the window, not in the leftover gap
-            // between unequal side content. Equal-flex HStack columns (PR #10)
-            // shift the logo whenever metrics width ≠ the button cluster, and
-            // a high-priority trailing infinity frame starved the leading
-            // column so ViewThatFits dropped SYS/CPU.
-            ZStack {
-                AkashicHeaderWordmarkView()
-                    .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
+            HStack(alignment: .center, spacing: 0) {
+                HeaderMetricsStrip()
+                    .frame(width: HeaderAppearanceLayout.leftZoneWidth, alignment: .leading)
+
+                Spacer(minLength: 8)
                     .allowsHitTesting(false)
 
-                HStack(alignment: .center, spacing: 8) {
-                    HeaderMetricsStrip()
-                    Spacer(minLength: 8)
-                        .allowsHitTesting(false)
-                    trailing()
+                Group {
+                    if settings.showAkashicLogo {
+                        AkashicHeaderWordmarkView()
+                            .offset(y: CyberpunkTheme.headerWordmarkVerticalOffset)
+                    } else {
+                        Color.clear
+                    }
                 }
+                .frame(width: HeaderAppearanceLayout.centerZoneWidth)
+                .allowsHitTesting(false)
+
+                Spacer(minLength: 8)
+                    .allowsHitTesting(false)
+
+                trailing()
+                    .frame(width: HeaderAppearanceLayout.rightZoneWidth, alignment: .trailing)
             }
             .frame(maxWidth: .infinity)
             .padding(.leading, CyberpunkTheme.headerStripLeadingPadding)
