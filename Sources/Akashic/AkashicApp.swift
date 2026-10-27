@@ -122,6 +122,7 @@ extension Notification.Name {
     static let akashicOpenMainWindow = Notification.Name("akashic.openMainWindow")
 }
 
+@MainActor
 final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     private let settingsController = AkashicSettingsWindowController()
     private var openSettingsObserver: NSObjectProtocol?
@@ -136,7 +137,9 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.settingsController.showSettings()
+            MainActor.assumeIsolated {
+                self?.settingsController.showSettings()
+            }
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
