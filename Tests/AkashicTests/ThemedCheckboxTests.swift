@@ -17,7 +17,9 @@ final class ThemedCheckboxTests: XCTestCase {
             encoding: .utf8
         )
         XCTAssertTrue(source.contains("ThemedDueDatePicker"))
-        XCTAssertFalse(source.contains("DatePicker("))
+        let nativeDatePicker = try NSRegularExpression(pattern: "(?<![A-Za-z])DatePicker\\(")
+        let range = NSRange(source.startIndex..., in: source)
+        XCTAssertNil(nativeDatePicker.firstMatch(in: source, range: range))
     }
 
     private func settingsViewSource() -> URL {
