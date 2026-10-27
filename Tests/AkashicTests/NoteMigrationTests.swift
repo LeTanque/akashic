@@ -2,6 +2,7 @@ import GRDB
 import XCTest
 @testable import Akashic
 
+@MainActor
 final class NoteMigrationTests: XCTestCase {
     func testCreateNotesMigrationPreservesExistingTodos() throws {
         let db = try TodoDatabase.openInMemory()

@@ -73,6 +73,24 @@ struct TagRecord: FetchableRecord, PersistableRecord, TableRecord, Equatable {
     var displayName: String
     var color: String
 
+    init(nameKey: String, displayName: String, color: String) {
+        self.nameKey = nameKey
+        self.displayName = displayName
+        self.color = color
+    }
+
+    init(row: Row) {
+        nameKey = row[Columns.nameKey]
+        displayName = row[Columns.displayName]
+        color = row[Columns.color]
+    }
+
+    func encode(to container: inout PersistenceContainer) {
+        container[Columns.nameKey] = nameKey
+        container[Columns.displayName] = displayName
+        container[Columns.color] = color
+    }
+
     var akashicTag: AkashicTag {
         AkashicTag(name: displayName, color: AkashicTagColor.validated(color))
     }
@@ -88,4 +106,19 @@ struct NoteTagLinkRow: FetchableRecord, PersistableRecord {
 
     var noteID: UUID
     var tagNameKey: String
+
+    init(noteID: UUID, tagNameKey: String) {
+        self.noteID = noteID
+        self.tagNameKey = tagNameKey
+    }
+
+    init(row: Row) {
+        noteID = UUID(uuidString: row[Columns.noteID]) ?? UUID()
+        tagNameKey = row[Columns.tagNameKey]
+    }
+
+    func encode(to container: inout PersistenceContainer) {
+        container[Columns.noteID] = noteID.uuidString
+        container[Columns.tagNameKey] = tagNameKey
+    }
 }

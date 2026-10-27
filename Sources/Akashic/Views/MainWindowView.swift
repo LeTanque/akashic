@@ -272,7 +272,7 @@ struct MainWindowView: View {
             )
             if case .tag(let tag) = noteTagFilter {
                 NoteTagChip(tag: tag, onRecolor: { color in
-                    applyTagRecolor(tag, color)
+                    applyTagRecolor(tag, color: color)
                 })
             }
             Spacer()
