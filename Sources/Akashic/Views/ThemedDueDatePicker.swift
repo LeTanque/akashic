@@ -198,7 +198,7 @@ struct ThemedDueDatePicker: View {
                     Rectangle().stroke(
                         today && !selected
                             ? CyberpunkTheme.neonCyan.opacity(0.9)
-                            : CyberpunkTheme.dueDatePickerInactiveBorder,
+                            : (selected ? CyberpunkTheme.neonCyan : CyberpunkTheme.dueDatePickerInactiveBorder),
                         lineWidth: today && !selected ? 1.5 : 1
                     )
                 )
