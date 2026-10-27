@@ -48,8 +48,10 @@ struct ThemedDropdown<Value: Hashable>: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .accessibilityLabel(accessibilityTitle)
-        .popover(isPresented: $isOpen, arrowEdge: .bottom) {
-            dropdownList
+        .background {
+            BorderlessFloatingPanelAnchor(isPresented: $isOpen) {
+                dropdownList
+            }
         }
         .onChange(of: isOpen) { _, open in
             if open {
@@ -92,6 +94,8 @@ struct ThemedDropdown<Value: Hashable>: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
+                .focusEffectDisabled()
             }
         }
         .padding(6)
@@ -121,7 +125,7 @@ struct ThemedDropdown<Value: Hashable>: View {
     }
 }
 
-/// Arrow keys, Return, and Esc while the themed dropdown popover is open.
+/// Arrow keys, Return, and Esc while the themed dropdown panel is open.
 private struct ThemedDropdownKeyHandler: NSViewRepresentable {
     var isActive: Bool
     var optionCount: Int

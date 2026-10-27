@@ -9,12 +9,12 @@ final class AkashicSettingsStoreTests: XCTestCase {
     override func setUp() {
         super.setUp()
         suiteName = "akashic.settings.tests.\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suiteName)!
-        defaults.removePersistentDomain(forName: suiteName)
+        // In-memory so test runs never write akashic.settings.tests.*.plist
+        // files into ~/Library/Preferences.
+        defaults = InMemoryUserDefaults(suiteName: suiteName)!
     }
 
     override func tearDown() {
-        defaults.removePersistentDomain(forName: suiteName)
         defaults = nil
         suiteName = nil
         super.tearDown()
@@ -58,4 +58,17 @@ final class AkashicSettingsStoreTests: XCTestCase {
         XCTAssertGreaterThan(HeaderAppearanceLayout.centerZoneWidth, 100)
         XCTAssertGreaterThan(HeaderAppearanceLayout.rightZoneWidth, 80)
     }
+}
+
+/// UserDefaults that never touches cfprefsd/disk; covers the accessors AkashicSettingsStore uses.
+private final class InMemoryUserDefaults: UserDefaults {
+    private var storage: [String: Any] = [:]
+
+    override func object(forKey defaultName: String) -> Any? { storage[defaultName] }
+    override func string(forKey defaultName: String) -> String? { storage[defaultName] as? String }
+    override func bool(forKey defaultName: String) -> Bool { (storage[defaultName] as? Bool) ?? false }
+    override func set(_ value: Any?, forKey defaultName: String) { storage[defaultName] = value }
+    override func set(_ value: Bool, forKey defaultName: String) { storage[defaultName] = value }
+    override func removeObject(forKey defaultName: String) { storage[defaultName] = nil }
+    override func removePersistentDomain(forName domainName: String) { storage.removeAll() }
 }

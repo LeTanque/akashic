@@ -91,21 +91,14 @@ struct TodoEditorView: View {
                     if !enabled {
                         draft.completeBy = nil
                         commitIfChanged()
-                    } else if draft.completeBy == nil {
-                        draft.completeBy = Date()
-                        commitIfChanged()
                     }
                 }
 
             if hasCompleteBy {
-                DatePicker(
-                    "Due",
-                    selection: Binding(
-                        get: { draft.completeBy ?? Date() },
-                        set: { draft.completeBy = $0; commitIfChanged() }
-                    ),
-                    displayedComponents: [.date, .hourAndMinute]
-                )
+                ThemedDueDatePicker(savedCompleteBy: draft.completeBy) { saved in
+                    draft.completeBy = saved
+                    commitIfChanged()
+                }
             }
 
             if let completedAt = draft.completedAt {
