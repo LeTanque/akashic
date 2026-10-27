@@ -60,7 +60,7 @@ struct TodoRowView: View {
                         .foregroundStyle(CyberpunkTheme.completedShaded)
                     Text("Created \(todo.createdOn.formatted(date: .abbreviated, time: .shortened))")
                         .font(AkashicFont.mono(AkashicFont.caption2, zoom: textZoom))
-                        .foregroundStyle(CyberpunkTheme.readableMutedCyan)
+                        .foregroundStyle(todo.completed ? CyberpunkTheme.completedShaded : CyberpunkTheme.readableMutedCyan)
                 }
             }
         }
