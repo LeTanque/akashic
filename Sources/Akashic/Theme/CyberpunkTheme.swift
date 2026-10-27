@@ -171,13 +171,10 @@ struct CyberHeaderStrip<Trailing: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 0) {
-                HeaderMetricsStrip()
-                    .frame(width: HeaderAppearanceLayout.leftZoneWidth, alignment: .leading)
-
-                Spacer(minLength: 8)
-                    .allowsHitTesting(false)
-
+            // Logo slot is centered in the window (ZStack), not in the gap
+            // between unequal side zones. Stats and buttons sit in fixed-width
+            // side zones, so toggling stats/logo never moves anything.
+            ZStack {
                 Group {
                     if settings.showAkashicLogo {
                         AkashicHeaderWordmarkView()
@@ -186,14 +183,19 @@ struct CyberHeaderStrip<Trailing: View>: View {
                         Color.clear
                     }
                 }
-                .frame(width: HeaderAppearanceLayout.centerZoneWidth)
+                .frame(width: HeaderAppearanceLayout.centerZoneWidth, height: CyberpunkTheme.headerWordmarkHeight)
                 .allowsHitTesting(false)
 
-                Spacer(minLength: 8)
-                    .allowsHitTesting(false)
+                HStack(alignment: .center, spacing: 0) {
+                    HeaderMetricsStrip()
+                        .frame(width: HeaderAppearanceLayout.leftZoneWidth, alignment: .leading)
 
-                trailing()
-                    .frame(width: HeaderAppearanceLayout.rightZoneWidth, alignment: .trailing)
+                    Spacer(minLength: 8)
+                        .allowsHitTesting(false)
+
+                    trailing()
+                        .frame(minWidth: HeaderAppearanceLayout.rightZoneWidth, alignment: .trailing)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.leading, CyberpunkTheme.headerStripLeadingPadding)
