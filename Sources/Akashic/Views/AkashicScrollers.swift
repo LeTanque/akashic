@@ -39,7 +39,7 @@ enum AkashicScrollerGeometry {
 // MARK: - Custom scroller
 
 final class AkashicScroller: NSScroller {
-    override class func scrollerWidth(for controlSize: NSControl.ControlSize, scrollerStyle: NSScrollView.ScrollerStyle) -> CGFloat {
+    override class func scrollerWidth(for controlSize: NSControl.ControlSize, scrollerStyle: NSScroller.Style) -> CGFloat {
         AkashicScrollerGeometry.knobWidth
     }
 
