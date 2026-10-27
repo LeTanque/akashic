@@ -4,6 +4,8 @@ import AppKit
 enum AkashicActivationPolicy {
     static func apply(showInDockAndAppSwitcher: Bool) {
         let policy: NSApplication.ActivationPolicy = showInDockAndAppSwitcher ? .regular : .accessory
-        NSApp.setActivationPolicy(policy)
+        // NSApp is nil in unit tests (no NSApplication); skip instead of crashing.
+        guard let app = NSApp else { return }
+        app.setActivationPolicy(policy)
     }
 }
