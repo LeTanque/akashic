@@ -12,7 +12,9 @@ struct NoteEditorView: View {
                 titleSection
                 tagsSection
                 bodySection
-                metadataSection
+                if !session.form.isNew {
+                    metadataSection
+                }
                 saveActionRow
             }
             .padding(20)
@@ -177,7 +179,8 @@ struct NoteBodySplitEditor: View {
 
     var body: some View {
         GeometryReader { geo in
-            let half = max(80, geo.size.height / 2)
+            // Each half carries 8pt padding top and bottom, plus a 1pt divider between them.
+            let half = max(80, (geo.size.height - 33) / 2)
             VStack(spacing: 0) {
                 MarkdownSourceEditor(
                     text: $text,
