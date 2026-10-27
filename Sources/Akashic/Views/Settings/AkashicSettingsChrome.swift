@@ -52,6 +52,7 @@ struct AkashicSettingsButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
+        .akashicSettingsFocusRing()
     }
 }
 

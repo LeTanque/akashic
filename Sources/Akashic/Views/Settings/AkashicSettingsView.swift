@@ -80,6 +80,7 @@ struct AkashicSettingsView: View {
                 )
         }
         .buttonStyle(.plain)
+        .akashicSettingsFocusRing()
     }
 
     @ViewBuilder
@@ -147,6 +148,7 @@ struct AkashicSettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .akashicSettingsFocusRing()
             }
         }
     }
@@ -197,6 +199,7 @@ struct AkashicSettingsView: View {
             }
         }
         .themedCheckboxToggleStyle(accent: AkashicSettingsChrome.accent)
+        .akashicSettingsFocusRing()
         .accessibilityLabel(title)
     }
 
