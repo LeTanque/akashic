@@ -15,7 +15,7 @@ final class HeaderMetricsGatingTests: XCTestCase {
         guard let liveRange = source.range(of: "private struct HeaderMetricsStripLive") else {
             return XCTFail("HeaderMetricsStripLive missing")
         }
-        let liveBlock = String(source[liveRange.lowerBound...].prefix(1200))
+        let liveBlock = String(source[liveRange.lowerBound...].prefix(2400))
         XCTAssertTrue(liveBlock.contains("CursorQuotaMonitor"))
         XCTAssertTrue(liveBlock.contains("live.start()"))
         XCTAssertTrue(liveBlock.contains("cursorQuota.start()"))

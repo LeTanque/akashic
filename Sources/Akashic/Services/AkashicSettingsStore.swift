@@ -31,23 +31,26 @@ final class AkashicSettingsStore: ObservableObject {
                 menuBarSymbolName = normalized
                 return
             }
-            UserDefaults.standard.set(normalized, forKey: Self.menuBarSymbolKey)
+            defaults.set(normalized, forKey: Self.menuBarSymbolKey)
         }
     }
 
     @Published var showSystemInformation: Bool {
         didSet {
-            UserDefaults.standard.set(showSystemInformation, forKey: Self.showSystemInformationKey)
+            defaults.set(showSystemInformation, forKey: Self.showSystemInformationKey)
         }
     }
 
     @Published var showAkashicLogo: Bool {
         didSet {
-            UserDefaults.standard.set(showAkashicLogo, forKey: Self.showAkashicLogoKey)
+            defaults.set(showAkashicLogo, forKey: Self.showAkashicLogoKey)
         }
     }
 
+    private let defaults: UserDefaults
+
     init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         if let saved = defaults.string(forKey: Self.menuBarSymbolKey) {
             menuBarSymbolName = Self.normalizedSymbol(saved)
         } else {
