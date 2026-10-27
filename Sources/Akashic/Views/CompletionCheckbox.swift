@@ -50,7 +50,7 @@ struct CompletionCheckbox: View {
 
     private var fillColor: Color {
         if completed {
-            return CyberpunkTheme.neonCyan
+            return CyberpunkTheme.neonOrange
         }
         if isHovered {
             return CyberpunkTheme.completedShaded.opacity(0.35)
@@ -59,16 +59,18 @@ struct CompletionCheckbox: View {
     }
 
     private var borderColor: Color {
+        let accent = completed ? CyberpunkTheme.neonOrange : CyberpunkTheme.neonCyan
         if isHovered {
-            return CyberpunkTheme.neonCyan
+            return accent
         }
-        return CyberpunkTheme.neonCyan.opacity(completed ? 1 : 0.85)
+        return accent.opacity(completed ? 1 : 0.85)
     }
 
     private var shadowColor: Color {
-        let base = CyberpunkTheme.neonCyan.opacity(completed ? 0.35 : 0.45)
+        let accent = completed ? CyberpunkTheme.neonOrange : CyberpunkTheme.neonCyan
+        let base = accent.opacity(completed ? 0.35 : 0.45)
         if isHovered {
-            return CyberpunkTheme.neonCyan.opacity(0.55)
+            return accent.opacity(0.55)
         }
         return base
     }

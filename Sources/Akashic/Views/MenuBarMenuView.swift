@@ -21,13 +21,10 @@ struct MenuBarMenuView: View {
 
         Divider()
 
-        Button("Import Demo Seed…") {
-            importBundledSeedFromMenu()
+        Button("Settings…") {
+            NotificationCenter.default.post(name: .akashicOpenSettings, object: nil)
         }
-
-        Button("Import JSON…") {
-            importJSONFromMenu()
-        }
+        .keyboardShortcut(",", modifiers: .command)
 
         Divider()
 
@@ -47,17 +44,6 @@ struct MenuBarMenuView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
-    }
-
-    private func importBundledSeedFromMenu() {
-        guard AkashicImportConfirmations.confirmReplaceWithBundledSeed() == .confirmed else { return }
-        store.importSeedFromBundle(replaceExisting: true)
-    }
-
-    private func importJSONFromMenu() {
-        guard AkashicImportConfirmations.confirmReplaceWithJSONFile() == .confirmed else { return }
-        guard let url = AkashicJSONImportPanel.pickFileURL() else { return }
-        store.importSeedFromFile(url: url)
     }
 
     private func openMainWindow() {

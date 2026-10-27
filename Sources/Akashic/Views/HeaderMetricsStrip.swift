@@ -5,6 +5,22 @@ import SwiftUI
 /// Two rows: DISK/SYS/CPU machine stats, then Cursor $ + CM + OM + BOT. Not a side panel or
 /// bottom inset; not shown in the menu-bar popover.
 struct HeaderMetricsStrip: View {
+    @EnvironmentObject private var settings: AkashicSettingsStore
+
+    var body: some View {
+        Group {
+            if MetricsMonitoringLifecycle.shouldMonitor(showSystemInformation: settings.showSystemInformation) {
+                HeaderMetricsStripLive()
+            } else {
+                Color.clear
+                    .frame(height: CyberpunkTheme.headerWordmarkHeight)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+private struct HeaderMetricsStripLive: View {
     @StateObject private var live = LiveMetricsMonitor()
     @StateObject private var cursorQuota = CursorQuotaMonitor()
 

@@ -47,10 +47,8 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(CyberpunkTheme.windowTopChromeVeilHeight, 28)
     }
 
-    /// Metrics flush left, wordmark geometrically centered in the window,
-    /// buttons flush right — not an equal-flex HStack that shifts the logo
-    /// when the two side clusters have different widths.
-    func testHeaderStripSourceCentersWordmarkIndependentlyOfSideColumns() throws {
+    /// Three fixed header zones — stats slot, logo slot, buttons — so toggles never reflow chrome.
+    func testHeaderStripUsesFixedThreeZoneLayout() throws {
         let themeURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -63,34 +61,13 @@ final class MainWindowChromeTests: XCTestCase {
         let after = String(source[stripRange.lowerBound...])
         let stripEnd = after.range(of: "\nstruct CyberBorderedButtonStyle")?.lowerBound ?? after.endIndex
         let strip = String(after[..<stripEnd])
-        XCTAssertTrue(
-            strip.contains("ZStack"),
-            "Wordmark must be overlaid at the window center, not flex-centered between unequal columns"
-        )
-        XCTAssertTrue(
-            strip.contains("HeaderMetricsStrip()"),
-            "Header strip is missing metrics"
-        )
-        XCTAssertTrue(
-            strip.contains("AkashicHeaderWordmarkView()"),
-            "Header strip is missing the wordmark"
-        )
-        XCTAssertTrue(
-            strip.contains("Spacer(minLength:"),
-            "HStack must push metrics left and buttons right around the centered wordmark"
-        )
-        XCTAssertFalse(
-            strip.contains("Color.clear"),
-            "Leading flex spacer would push metrics off the content's left edge"
-        )
-        XCTAssertFalse(
-            strip.contains("layoutPriority"),
-            "layoutPriority on a flex column starves the other side (PR #10 ViewThatFits collapse)"
-        )
-        XCTAssertTrue(
-            strip.contains("WindowDragRegion()"),
-            "Header must keep the window-drag region"
-        )
+        XCTAssertTrue(strip.contains("HeaderAppearanceLayout.leftZoneWidth"))
+        XCTAssertTrue(strip.contains("HeaderAppearanceLayout.centerZoneWidth"))
+        XCTAssertTrue(strip.contains("HeaderAppearanceLayout.rightZoneWidth"))
+        XCTAssertTrue(strip.contains("settings.showAkashicLogo"))
+        XCTAssertTrue(strip.contains("HeaderMetricsStrip()"))
+        XCTAssertTrue(strip.contains("WindowDragRegion()"))
+        XCTAssertFalse(strip.contains("layoutPriority"))
     }
 
     /// The main-window HUD must always render both machine + usage rows. ViewThatFits
@@ -201,7 +178,7 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertFalse(actions.contains("Close main window"))
     }
 
-    func testMenuBarMenuOffersDestructiveImportsWithConfirmation() throws {
+    func testMenuBarMenuOpensSettingsAndOmitsImportActions() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -210,16 +187,61 @@ final class MainWindowChromeTests: XCTestCase {
             contentsOf: root.appendingPathComponent("Sources/Akashic/Views/MenuBarMenuView.swift"),
             encoding: .utf8
         )
+        XCTAssertTrue(menuSource.contains("Settings…"))
+        XCTAssertTrue(menuSource.contains("akashicOpenSettings"))
+        XCTAssertFalse(menuSource.contains("Import Demo Seed"))
+        XCTAssertFalse(menuSource.contains("Import JSON"))
+    }
+
+    func testSettingsImportExportTabKeepsDestructiveConfirmations() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/Akashic/Views/Settings/AkashicSettingsView.swift"),
+            encoding: .utf8
+        )
         let confirmSource = try String(
             contentsOf: root.appendingPathComponent("Sources/Akashic/Services/AkashicImportConfirmations.swift"),
             encoding: .utf8
         )
-        XCTAssertTrue(menuSource.contains("Import Demo Seed"))
-        XCTAssertTrue(menuSource.contains("Import JSON"))
-        XCTAssertTrue(menuSource.contains("AkashicImportConfirmations.confirmReplaceWithBundledSeed()"))
-        XCTAssertTrue(menuSource.contains("AkashicImportConfirmations.confirmReplaceWithJSONFile()"))
+        XCTAssertTrue(settingsSource.contains("IMPORT DEMO SEED"))
+        XCTAssertTrue(settingsSource.contains("IMPORT JSON"))
+        XCTAssertTrue(settingsSource.contains("EXPORT TO JSON"))
+        XCTAssertTrue(settingsSource.contains("AkashicImportConfirmations.confirmReplaceWithBundledSeed()"))
+        XCTAssertTrue(settingsSource.contains("AkashicImportConfirmations.confirmReplaceWithJSONFile()"))
         XCTAssertTrue(confirmSource.contains("Replace all todos?"))
         XCTAssertTrue(confirmSource.contains("alertStyle = .warning"))
+    }
+
+    func testCustomSettingsPanelUsesChamferedBorderlessChrome() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let panelSource = try String(
+            contentsOf: root
+                .appendingPathComponent("Sources/Akashic/Views/Settings/AkashicSettingsWindowController.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(panelSource.contains("AkashicSettingsPanel"))
+        XCTAssertTrue(panelSource.contains(".borderless"))
+        XCTAssertTrue(panelSource.contains("AkashicSettingsChamferedEffectView"))
+        XCTAssertTrue(panelSource.contains("isMovableByWindowBackground = true"))
+    }
+
+    func testMenuBarExtraUsesDynamicSettingsSymbol() throws {
+        let appSource = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Sources/Akashic/AkashicApp.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(appSource.contains("settings.menuBarSymbolName"))
+        XCTAssertFalse(appSource.contains("MenuBarExtra(\"Akashic\", systemImage: \"sparkles\")"))
     }
 
     func testHeaderAndMenuBarMenuRemoveFullscreenControls() throws {
