@@ -56,7 +56,9 @@ final class NoteStore: ObservableObject {
     func insertSavedNote(from draft: NoteItem) -> NoteItem {
         var item = draft
         item.tags = NoteTagNormalization.normalizeTags(item.tags)
-        item.updatedAt = Date()
+        let now = Date()
+        item.createdAt = now
+        item.updatedAt = now
         try? db.write { db in
             try item.save(db)
             try Self.syncNoteTagLinks(noteID: item.id, tags: item.tags, db: db)
@@ -115,21 +117,29 @@ final class NoteStore: ObservableObject {
         return allTagDefinitions().filter { keys.contains($0.nameKey) }
     }
 
+    enum SetTagColorOutcome: Equatable {
+        case updated(AkashicTag)
+        case notFound
+        case invalidName
+    }
+
     @discardableResult
-    func setTagColor(name: String, color: AkashicTagColor) -> AkashicTag? {
+    func setTagColor(name: String, color: AkashicTagColor) -> SetTagColorOutcome {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
+        guard !trimmed.isEmpty else { return .invalidName }
         let key = trimmed.lowercased()
-        try? db.write { db in
-            if var existing = try TagRecord.fetchOne(db, key: key) {
-                existing.color = color.rawValue
-                try existing.update(db)
-            } else {
-                try TagRecord(nameKey: key, displayName: trimmed, color: color.rawValue).insert(db)
-            }
-        }
+        let updated: Bool = (try? db.write { db in
+            guard var existing = try TagRecord.fetchOne(db, key: key) else { return false }
+            existing.color = color.rawValue
+            try existing.update(db)
+            return true
+        }) ?? false
+        guard updated else { return .notFound }
         refresh()
-        return allTagDefinitions().first { $0.nameKey == key }
+        guard let tag = allTagDefinitions().first(where: { $0.nameKey == key }) else {
+            return .notFound
+        }
+        return .updated(tag)
     }
 
     func filteredNotes(tag: AkashicTag?, sort: NoteListSort) -> [NoteItem] {

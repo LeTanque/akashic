@@ -33,7 +33,9 @@ final class NoteStoreTests: XCTestCase {
             title: "B",
             tags: [AkashicTag(name: "shared", color: .cyan)]
         ))
-        _ = store.setTagColor(name: "shared", color: .magenta)
+        guard case .updated = store.setTagColor(name: "shared", color: .magenta) else {
+            return XCTFail("Expected tag color update")
+        }
         XCTAssertTrue(store.notes.allSatisfy { note in
             note.tags.first?.color == .magenta
         })
@@ -51,6 +53,27 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(byTitle.map(\.title), ["Alpha", "Zebra"])
         let byTag = store.filteredNotes(tag: nil, sort: .tagAZ)
         XCTAssertEqual(byTag.first?.title, "Alpha")
+    }
+
+    func testSetTagColorReturnsNotFoundForUnknownTag() throws {
+        let store = try NoteStore.isolatedForTesting()
+        XCTAssertEqual(store.setTagColor(name: "missing", color: .red), .notFound)
+        XCTAssertTrue(store.allTagDefinitions().isEmpty)
+    }
+
+    func testInsertSavedNoteSetsCreatedAtAtSaveTime() throws {
+        let store = try NoteStore.isolatedForTesting()
+        var draft = NoteItem.new(title: "Saved later", body: "")
+        let stale = Date(timeIntervalSince1970: 1_000)
+        draft.createdAt = stale
+        draft.updatedAt = stale
+        // DB dates are stored at millisecond precision, so allow 1 ms of truncation.
+        let before = Date().addingTimeInterval(-0.001)
+        let saved = store.insertSavedNote(from: draft)
+        let after = Date().addingTimeInterval(0.001)
+        XCTAssertGreaterThanOrEqual(saved.createdAt, before)
+        XCTAssertLessThanOrEqual(saved.createdAt, after)
+        XCTAssertNotEqual(saved.createdAt, stale)
     }
 
     func testNewNoteDraftDoesNotAppearUntilSaved() throws {

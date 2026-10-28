@@ -55,8 +55,7 @@ struct NoteTagChip: View {
     }
 
     private func presentPicker(anchor: NSRect) {
-        guard let picked = TagColorPickerPresenter.pickColor(for: tag, anchor: anchor) else { return }
-        onRecolor(picked)
+        TagColorPickerPresenter.present(for: tag, anchor: anchor, onPick: onRecolor)
     }
 }
 
@@ -80,9 +79,10 @@ private final class RightClickHostingView<Content: View>: NSHostingView<Content>
     var onRightClick: ((NSRect) -> Void)?
 
     override func rightMouseDown(with event: NSEvent) {
-        let rect = bounds
-        let screen = convert(rect, to: nil)
-        onRightClick?(screen)
+        guard let window else { return }
+        let anchorInWindow = convert(bounds, to: nil)
+        let anchorOnScreen = window.convertToScreen(anchorInWindow)
+        onRightClick?(anchorOnScreen)
     }
 }
 

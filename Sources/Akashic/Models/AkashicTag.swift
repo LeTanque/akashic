@@ -34,11 +34,16 @@ enum AkashicTagColor: String, CaseIterable, Sendable, Codable, Hashable, Identif
 
     static func validated(_ raw: String?) -> AkashicTagColor {
         guard let raw else { return .defaultForNewTag }
+        return parseStrict(raw) ?? .defaultForNewTag
+    }
+
+    /// Returns nil when `raw` is not a known palette name (API PATCH validation).
+    static func parseStrict(_ raw: String) -> AkashicTagColor? {
         let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             .replacingOccurrences(of: "-", with: "_")
             .replacingOccurrences(of: " ", with: "_")
         if normalized == "electricblue" { return .electricBlue }
-        return AkashicTagColor(rawValue: normalized) ?? .defaultForNewTag
+        return AkashicTagColor(rawValue: normalized)
     }
 
     var swiftUIColor: Color {

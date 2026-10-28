@@ -25,6 +25,10 @@ private enum NoteTagFilterOption: Hashable, Identifiable {
         case .tag(let tag): tag.name
         }
     }
+
+    // Identity is the tag key, not its color, so a recolored tag stays the same selection.
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct MainWindowView: View {
@@ -53,9 +57,18 @@ struct MainWindowView: View {
         [.all] + noteStore.tagsUsedInNotes().map { .tag($0) }
     }
 
+    /// The selected filter with its tag's current definition (e.g. after a recolor).
+    private var resolvedNoteTagFilter: NoteTagFilterOption {
+        noteTagFilterOptions.first { $0 == noteTagFilter } ?? noteTagFilter
+    }
+
+    private var resolvedNoteTagFilterBinding: Binding<NoteTagFilterOption> {
+        Binding(get: { resolvedNoteTagFilter }, set: { noteTagFilter = $0 })
+    }
+
     private var filteredNotes: [NoteItem] {
         let tag: AkashicTag? = {
-            if case .tag(let t) = noteTagFilter { return t }
+            if case .tag(let t) = resolvedNoteTagFilter { return t }
             return nil
         }()
         return noteStore.filteredNotes(tag: tag, sort: noteSort)
@@ -256,7 +269,7 @@ struct MainWindowView: View {
                 .foregroundStyle(CyberpunkTheme.neonCyan)
             ThemedDropdown(
                 accessibilityTitle: "Filter by tag",
-                selection: $noteTagFilter,
+                selection: resolvedNoteTagFilterBinding,
                 options: noteTagFilterOptions,
                 label: { $0.label },
                 accent: { option in
@@ -270,7 +283,7 @@ struct MainWindowView: View {
                 options: Array(NoteListSort.allCases),
                 label: { $0.rawValue }
             )
-            if case .tag(let tag) = noteTagFilter {
+            if case .tag(let tag) = resolvedNoteTagFilter {
                 NoteTagChip(tag: tag, onRecolor: { color in
                     applyTagRecolor(tag, color: color)
                 })
