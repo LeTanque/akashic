@@ -21,9 +21,23 @@ final class TagColorPickerPresenterTests: XCTestCase {
         let anchor = NSRect(x: 0, y: 0, width: 40, height: 20)
         struct Stub: TagColorPickerPresenting {
             let color: AkashicTagColor?
-            func pickColor(for tag: AkashicTag, anchorOnScreen: NSRect) -> AkashicTagColor? { color }
+            func presentPicker(for tag: AkashicTag, anchorOnScreen: NSRect, onPick: @escaping (AkashicTagColor) -> Void) {
+                if let color { onPick(color) }
+            }
         }
-        XCTAssertEqual(Stub(color: .orange).pickColor(for: tag, anchorOnScreen: anchor), .orange)
-        XCTAssertNil(Stub(color: nil).pickColor(for: tag, anchorOnScreen: anchor))
+        var picked: [AkashicTagColor] = []
+        Stub(color: .orange).presentPicker(for: tag, anchorOnScreen: anchor) { picked.append($0) }
+        Stub(color: nil).presentPicker(for: tag, anchorOnScreen: anchor) { picked.append($0) }
+        XCTAssertEqual(picked, [.orange])
+    }
+
+    func testPresentReturnsImmediatelyAndEscapeDismissesWithoutPick() {
+        let tag = AkashicTag(name: "work", color: .cyan)
+        var picked: AkashicTagColor?
+        TagColorPickerPresenter.present(for: tag, anchor: NSRect(x: 200, y: 300, width: 40, height: 20)) { picked = $0 }
+        XCTAssertTrue(TagColorPickerPresenter.isPresenting, "present must not block the caller")
+        TagColorPickerPresenter.dismissActive()
+        XCTAssertFalse(TagColorPickerPresenter.isPresenting)
+        XCTAssertNil(picked)
     }
 }

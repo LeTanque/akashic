@@ -67,9 +67,10 @@ final class NoteStoreTests: XCTestCase {
         let stale = Date(timeIntervalSince1970: 1_000)
         draft.createdAt = stale
         draft.updatedAt = stale
-        let before = Date()
+        // DB dates are stored at millisecond precision, so allow 1 ms of truncation.
+        let before = Date().addingTimeInterval(-0.001)
         let saved = store.insertSavedNote(from: draft)
-        let after = Date()
+        let after = Date().addingTimeInterval(0.001)
         XCTAssertGreaterThanOrEqual(saved.createdAt, before)
         XCTAssertLessThanOrEqual(saved.createdAt, after)
         XCTAssertNotEqual(saved.createdAt, stale)

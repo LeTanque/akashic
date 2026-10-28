@@ -55,8 +55,7 @@ struct NoteTagChip: View {
     }
 
     private func presentPicker(anchor: NSRect) {
-        guard let picked = TagColorPickerPresenter.pickColor(for: tag, anchor: anchor) else { return }
-        onRecolor(picked)
+        TagColorPickerPresenter.present(for: tag, anchor: anchor, onPick: onRecolor)
     }
 }
 

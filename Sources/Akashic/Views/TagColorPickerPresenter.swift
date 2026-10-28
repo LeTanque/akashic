@@ -3,15 +3,18 @@ import SwiftUI
 
 @MainActor
 protocol TagColorPickerPresenting {
-    func pickColor(for tag: AkashicTag, anchorOnScreen: NSRect) -> AkashicTagColor?
+    /// Shows the palette and returns immediately; `onPick` runs only when a swatch is chosen.
+    func presentPicker(for tag: AkashicTag, anchorOnScreen: NSRect, onPick: @escaping (AkashicTagColor) -> Void)
 }
 
 /// Themed tag-color palette for right-click on a tag chip.
 ///
-/// Built from AppKit controls (like `UnsavedChangesAlertPresenter`) because the picker is
-/// opened synchronously from a SwiftUI context-menu path; SwiftUI buttons in a nested modal panel
-/// do not receive clicks reliably. Uses a non-modal panel plus event monitors for outside click
-/// and Esc instead of wedging the app in `runModal`.
+/// Built from AppKit controls (like `UnsavedChangesAlertPresenter`). Presentation is fully
+/// non-blocking: the panel is ordered front and control returns to the main event loop, so real
+/// mouse clicks and key presses are dispatched normally. (Spinning a nested `RunLoop` or
+/// `runModal` from inside `rightMouseDown` starves `NSApp.sendEvent`, which is why earlier
+/// versions could not be clicked or dismissed.) Outside click, Esc, app deactivation, and a
+/// swatch click all close the panel.
 @MainActor
 struct TagColorPickerPresenter: TagColorPickerPresenting {
     static var defaultPanelSize: NSSize {
@@ -19,11 +22,22 @@ struct TagColorPickerPresenter: TagColorPickerPresenting {
         return NSSize(width: 220, height: 56 + CGFloat(rows) * 36)
     }
 
-    static func pickColor(for tag: AkashicTag, anchor: NSRect) -> AkashicTagColor? {
-        TagColorPickerPresenter().pickColor(for: tag, anchorOnScreen: anchor)
+    /// The one live session; retained here because nothing blocks while the panel is open.
+    private static var activeSession: TagColorPickerSession?
+
+    static var isPresenting: Bool { activeSession != nil }
+
+    static func present(for tag: AkashicTag, anchor: NSRect, onPick: @escaping (AkashicTagColor) -> Void) {
+        TagColorPickerPresenter().presentPicker(for: tag, anchorOnScreen: anchor, onPick: onPick)
     }
 
-    func pickColor(for tag: AkashicTag, anchorOnScreen: NSRect) -> AkashicTagColor? {
+    static func dismissActive() {
+        activeSession?.finish(with: .cancelled)
+    }
+
+    func presentPicker(for tag: AkashicTag, anchorOnScreen: NSRect, onPick: @escaping (AkashicTagColor) -> Void) {
+        Self.dismissActive()
+
         let session = TagColorPickerSession(selected: tag.color)
         let panelSize = Self.defaultPanelSize
         let origin = Self.panelOrigin(anchorOnScreen: anchorOnScreen, panelSize: panelSize)
@@ -34,25 +48,19 @@ struct TagColorPickerPresenter: TagColorPickerPresenting {
             session: session
         )
         session.panel = panel
+        session.onFinish = { outcome in
+            panel.orderOut(nil)
+            Self.activeSession = nil
+            Self.refrontMainWindow()
+            if case .picked(let color) = outcome {
+                onPick(color)
+            }
+        }
+        Self.activeSession = session
 
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         session.installDismissMonitors()
-
-        while session.outcome == nil {
-            RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.05))
-        }
-
-        session.tearDown()
-        panel.orderOut(nil)
-        Self.refrontMainWindow()
-
-        switch session.outcome {
-        case .picked(let color):
-            return color
-        case .cancelled, .none:
-            return nil
-        }
     }
 
     static func panelOrigin(anchorOnScreen: NSRect, panelSize: NSSize) -> NSPoint {
@@ -92,11 +100,13 @@ private final class TagColorPickerSession {
     }
 
     let selected: AkashicTagColor
-    var outcome: Outcome?
+    private(set) var outcome: Outcome?
     weak var panel: TagColorPickerPanel?
+    var onFinish: ((Outcome) -> Void)?
     private var localMouseMonitor: Any?
     private var globalMouseMonitor: Any?
     private var localKeyMonitor: Any?
+    private var resignObserver: NSObjectProtocol?
 
     init(selected: AkashicTagColor) {
         self.selected = selected
@@ -105,22 +115,25 @@ private final class TagColorPickerSession {
     func finish(with outcome: Outcome) {
         guard self.outcome == nil else { return }
         self.outcome = outcome
+        tearDownMonitors()
+        let handler = onFinish
+        onFinish = nil
+        handler?(outcome)
     }
 
     func installDismissMonitors() {
         tearDownMonitors()
-        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) {
             [weak self] event in
             guard let self, let panel = self.panel else { return event }
-            let point = NSEvent.mouseLocation
-            if !panel.frame.contains(point) {
+            if event.window !== panel {
                 self.finish(with: .cancelled)
             }
             return event
         }
-        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) {
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) {
             [weak self] _ in
-            self?.finish(with: .cancelled)
+            MainActor.assumeIsolated { self?.finish(with: .cancelled) }
         }
         localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
@@ -130,10 +143,13 @@ private final class TagColorPickerSession {
             }
             return event
         }
-    }
-
-    func tearDown() {
-        tearDownMonitors()
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.finish(with: .cancelled) }
+        }
     }
 
     private func tearDownMonitors() {
@@ -149,8 +165,13 @@ private final class TagColorPickerSession {
             NSEvent.removeMonitor(localKeyMonitor)
             self.localKeyMonitor = nil
         }
+        if let resignObserver {
+            NotificationCenter.default.removeObserver(resignObserver)
+            self.resignObserver = nil
+        }
     }
 }
+
 
 private enum TagColorPickerStyle {
     static let accent = NSColor(AkashicSettingsChrome.accent)
@@ -291,6 +312,7 @@ private final class TagColorSwatchButton: NSButton {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
