@@ -217,14 +217,23 @@ final class TodoAPIServer: @unchecked Sendable {
                   let colorRaw = object["color"] as? String else {
                 return json(["error": "color required"], status: .badRequest)
             }
-            let color = AkashicTagColor.validated(colorRaw)
-            let tag = await MainActor.run {
+            guard let color = AkashicTagColor.parseStrict(colorRaw) else {
+                return json(
+                    ["error": "invalid color; use one of: \(AkashicTagColor.allCases.map(\.rawValue).joined(separator: ", "))"],
+                    status: .badRequest
+                )
+            }
+            let outcome = await MainActor.run {
                 noteStore.setTagColor(name: name, color: color)
             }
-            guard let tag else {
+            switch outcome {
+            case .updated(let tag):
+                return json(["tag": TagAPIDTO(tag)])
+            case .notFound:
+                return json(["error": "tag not found"], status: .notFound)
+            case .invalidName:
                 return json(["error": "invalid tag name"], status: .badRequest)
             }
-            return json(["tag": TagAPIDTO(tag)])
         }
     }
 

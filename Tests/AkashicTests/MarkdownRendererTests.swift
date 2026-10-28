@@ -13,6 +13,14 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(String(attributed.characters), "just words")
     }
 
+    func testBlankLineBetweenParagraphsInsertsBreak() {
+        let text = String(MarkdownRenderer.attributedString(from: "fore\n\nsee").characters)
+        XCTAssertTrue(text.contains("fore"))
+        XCTAssertTrue(text.contains("see"))
+        XCTAssertNotEqual(text, "foresee")
+        XCTAssertTrue(text.contains("\n"), "Expected a visible paragraph break, got: \(text)")
+    }
+
     func testParsesStrongEmphasis() {
         let attributed = MarkdownRenderer.attributedString(from: "say **bold** now")
         XCTAssertTrue(

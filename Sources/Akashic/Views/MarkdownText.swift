@@ -151,10 +151,12 @@ enum MarkdownRenderer {
     ) -> AttributedString {
         var output = AttributedString()
         var emittedMarkerForItem: Int?
+        var previousParagraphID: Int?
 
         for run in source.runs {
             var fragment = AttributedString(source[run.range])
             let intent = run.presentationIntent
+            let paragraphID = paragraphIdentity(of: intent)
 
             if let headerLevel = headerLevel(of: intent) {
                 applyHeadingStyle(&fragment, level: headerLevel, basePointSize: basePointSize)
@@ -169,8 +171,17 @@ enum MarkdownRenderer {
                     output += AttributedString(list.marker)
                     emittedMarkerForItem = list.itemID
                 }
+                previousParagraphID = nil
             } else {
+                if let paragraphID, paragraphID != previousParagraphID, emittedMarkerForItem == nil {
+                    if !output.characters.isEmpty, !endsWithNewline(output), !startsWithNewline(fragment) {
+                        output += AttributedString("\n\n")
+                    }
+                }
                 emittedMarkerForItem = nil
+                if paragraphID != nil {
+                    previousParagraphID = paragraphID
+                }
             }
 
             output += fragment
@@ -272,6 +283,21 @@ enum MarkdownRenderer {
     private static func endsWithNewline(_ attributed: AttributedString) -> Bool {
         guard let last = attributed.characters.last else { return true }
         return last == "\n" || last == "\r"
+    }
+
+    private static func startsWithNewline(_ attributed: AttributedString) -> Bool {
+        guard let first = attributed.characters.first else { return true }
+        return first == "\n" || first == "\r"
+    }
+
+    private static func paragraphIdentity(of intent: PresentationIntent?) -> Int? {
+        guard let intent else { return nil }
+        for component in intent.components {
+            if case .paragraph = component.kind {
+                return component.identity
+            }
+        }
+        return nil
     }
 }
 

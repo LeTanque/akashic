@@ -18,6 +18,23 @@ final class NoteTagAPITests: XCTestCase {
         XCTAssertTrue(tags.allSatisfy { $0.color == .defaultForNewTag })
     }
 
+    func testDecodeMixedStringAndObjectTags() {
+        let mixed: [Any] = [
+            "plain",
+            ["name": "colored", "color": "purple"],
+            "plain",
+        ]
+        let tags = NoteTagAPIDecoding.decodeTags(from: mixed)
+        XCTAssertEqual(tags.map(\.name), ["plain", "colored"])
+        XCTAssertEqual(tags.first?.color, .defaultForNewTag)
+        XCTAssertEqual(tags.last?.color, .purple)
+    }
+
+    func testParseStrictRejectsUnknownColor() {
+        XCTAssertNil(AkashicTagColor.parseStrict("not-a-color"))
+        XCTAssertEqual(AkashicTagColor.parseStrict("orange"), .orange)
+    }
+
     func testNoteAPIDTOShape() throws {
         let note = NoteItem.new(
             title: "T",

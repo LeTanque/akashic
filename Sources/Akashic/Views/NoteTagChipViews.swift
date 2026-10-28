@@ -80,9 +80,10 @@ private final class RightClickHostingView<Content: View>: NSHostingView<Content>
     var onRightClick: ((NSRect) -> Void)?
 
     override func rightMouseDown(with event: NSEvent) {
-        let rect = bounds
-        let screen = convert(rect, to: nil)
-        onRightClick?(screen)
+        guard let window else { return }
+        let anchorInWindow = convert(bounds, to: nil)
+        let anchorOnScreen = window.convertToScreen(anchorInWindow)
+        onRightClick?(anchorOnScreen)
     }
 }
 

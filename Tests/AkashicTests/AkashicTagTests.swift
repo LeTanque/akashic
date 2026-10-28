@@ -5,6 +5,7 @@ final class AkashicTagTests: XCTestCase {
     func testPaletteValidationUnknownFallsBackToDefault() {
         XCTAssertEqual(AkashicTagColor.validated(nil), .cyan)
         XCTAssertEqual(AkashicTagColor.validated("not-a-color"), .cyan)
+        XCTAssertNil(AkashicTagColor.parseStrict("not-a-color"))
         XCTAssertEqual(AkashicTagColor.validated("ORANGE"), .orange)
         XCTAssertEqual(AkashicTagColor.validated("electric-blue"), .electricBlue)
     }
