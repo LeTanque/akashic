@@ -21,6 +21,44 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertTrue(text.contains("\n"), "Expected a visible paragraph break, got: \(text)")
     }
 
+    func testSingleNewlineWithinParagraphRendersAsSoftBreak() {
+        let text = String(MarkdownRenderer.attributedString(from: "line one\nline two").characters)
+        XCTAssertTrue(text.contains("line one"))
+        XCTAssertTrue(text.contains("line two"))
+        XCTAssertNotEqual(text, "line one line two")
+        XCTAssertTrue(text.contains("\n"), "Expected a soft line break, got: \(text)")
+    }
+
+    func testFranksRegressionBlocksHeadingsAndHashLikeText() {
+        let source =
+            "home-ops processes. Spend more time with pstack and leverage that plugin where it makes sense. Includes DoD skill work if we want one.\n\n# TITLE\n\nhuh\n\n#rsgsg\n\n# ok\n\n## ok"
+        let attributed = MarkdownRenderer.attributedString(from: source)
+        let text = String(attributed.characters)
+
+        XCTAssertTrue(text.contains("one."))
+        XCTAssertTrue(text.contains("TITLE"))
+        XCTAssertFalse(text.contains("one.TITLE"), "Heading must not run into the preceding paragraph: \(text)")
+        XCTAssertTrue(text.contains("#rsgsg"), "Hash without following space stays literal: \(text)")
+        XCTAssertFalse(text.contains("#rsgsgok"), "Blocks must not merge: \(text)")
+        XCTAssertTrue(containsHeader(attributed, level: 1))
+        XCTAssertTrue(containsHeader(attributed, level: 2))
+        XCTAssertTrue(text.contains("huh"))
+    }
+
+    func testHeadingAfterParagraphHasVisibleGap() {
+        let text = String(MarkdownRenderer.attributedString(from: "intro words\n\n# Next").characters)
+        XCTAssertTrue(text.contains("intro words"))
+        XCTAssertTrue(text.contains("Next"))
+        XCTAssertFalse(text.contains("wordsNext"))
+    }
+
+    func testHeadingAfterHeadingStaysSeparate() {
+        let text = String(MarkdownRenderer.attributedString(from: "# First\n\n## Second").characters)
+        XCTAssertTrue(text.contains("First"))
+        XCTAssertTrue(text.contains("Second"))
+        XCTAssertFalse(text.contains("FirstSecond"))
+    }
+
     func testParsesStrongEmphasis() {
         let attributed = MarkdownRenderer.attributedString(from: "say **bold** now")
         XCTAssertTrue(

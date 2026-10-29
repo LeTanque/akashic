@@ -43,15 +43,14 @@ struct NoteEditorView: View {
     }
 
     private var tagsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Tags")
-                .font(AkashicFont.mono(AkashicFont.caption, zoom: textZoom))
-                .foregroundStyle(CyberpunkTheme.completedShaded)
-            NoteTagChipRow(
-                tags: session.form.draft.tags,
-                onRemove: { tag in session.mutateForm { $0.removeTag(tag) } },
-                onRecolor: recolorTag
-            )
+        VStack(alignment: .leading, spacing: 6) {
+            if !session.form.draft.tags.isEmpty {
+                NoteTagChipRow(
+                    tags: session.form.draft.tags,
+                    onRemove: { tag in session.mutateForm { $0.removeTag(tag) } },
+                    onRecolor: recolorTag
+                )
+            }
             TagInputField(text: tagInputBinding, onCommit: {
                 session.mutateForm { $0.commitTagsFromInput() }
             })
@@ -134,7 +133,10 @@ struct NoteEditorView: View {
     private var tagInputBinding: Binding<String> {
         Binding(
             get: { session.form.tagInput },
-            set: { newValue in session.mutateForm { $0.tagInput = newValue } }
+            set: { newValue in
+                let capped = String(newValue.prefix(NoteTagNormalization.maxNameLength))
+                session.mutateForm { $0.tagInput = capped }
+            }
         )
     }
 
@@ -161,12 +163,15 @@ private struct TagInputField: View {
             fontSize: AkashicFont.callout * textZoom,
             accessibilityLabel: "Tag input",
             onChange: {
+                if text.count > NoteTagNormalization.maxNameLength {
+                    text = String(text.prefix(NoteTagNormalization.maxNameLength))
+                }
                 if text.contains("\n") {
                     onCommit()
                 }
             }
         )
-        .frame(minHeight: 36 * textZoom, maxHeight: 48 * textZoom)
+        .frame(width: 168 * textZoom, minHeight: 28 * textZoom, maxHeight: 36 * textZoom)
         .padding(6)
         .cyberPanel()
         .onSubmit(onCommit)

@@ -10,6 +10,20 @@ final class AkashicTagTests: XCTestCase {
         XCTAssertEqual(AkashicTagColor.validated("electric-blue"), .electricBlue)
     }
 
+    func testNormalizeTagsClampsNamesToMaxLength() {
+        let long = String(repeating: "a", count: 30)
+        let tags = NoteTagNormalization.normalizeTags([
+            AkashicTag(name: long, color: .cyan),
+        ])
+        XCTAssertEqual(tags.map(\.name), [String(repeating: "a", count: NoteTagNormalization.maxNameLength)])
+    }
+
+    func testAPITagNameLengthValidationRejectsLongNames() {
+        let long = String(repeating: "z", count: 25)
+        XCTAssertNotNil(NoteTagNormalization.apiTagNameLengthError(in: [long]))
+        XCTAssertNil(NoteTagNormalization.apiTagNameLengthError(in: ["short"]))
+    }
+
     func testNormalizeTagsTrimsDedupesPreservesCase() {
         let tags = NoteTagNormalization.normalizeTags([
             AkashicTag(name: " Work ", color: .orange),

@@ -12,6 +12,13 @@ final class NoteTagAPITests: XCTestCase {
         XCTAssertEqual(tags.first?.color, .orange)
     }
 
+    func testDecodeStringTagsRejectsOverMaxLengthViaAPIValidation() {
+        let long = String(repeating: "x", count: 25)
+        XCTAssertNotNil(NoteTagNormalization.apiTagNameLengthError(in: [long, "ok"]))
+        let within = String(repeating: "y", count: 24)
+        XCTAssertNil(NoteTagNormalization.apiTagNameLengthError(in: [within]))
+    }
+
     func testDecodeStringTagsDefaultColor() {
         let tags = NoteTagAPIDecoding.decodeTags(from: ["alpha", "Beta", "alpha"])
         XCTAssertEqual(tags.map(\.name), ["alpha", "Beta"])
