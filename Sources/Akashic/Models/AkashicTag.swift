@@ -11,7 +11,8 @@ struct AkashicTag: Equatable, Sendable, Codable, Hashable, Identifiable {
     var nameKey: String { name.lowercased() }
 
     init(name: String, color: AkashicTagColor = .defaultForNewTag) {
-        self.name = NoteTagNormalization.clampedName(name)
+        // Trim only: tags saved before the length limit keep their full name (and key).
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.color = color
     }
 }
@@ -126,12 +127,30 @@ enum NoteTagNormalization {
         var seen = Set<String>()
         var result: [AkashicTag] = []
         for tag in tags {
-            let trimmed = clampedName(tag.name)
+            // Existing tags are not renamed; the limit applies to new names (input + API).
+            let trimmed = tag.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             let key = trimmed.lowercased()
             guard !seen.contains(key) else { continue }
             seen.insert(key)
             result.append(AkashicTag(name: trimmed, color: tag.color))
+        }
+        return result
+    }
+
+    /// Caps each comma/newline-separated segment of the tag input at `maxNameLength`,
+    /// keeping the separators so Return still commits a full-length tag.
+    static func capTagInput(_ text: String) -> String {
+        var result = ""
+        var segmentCount = 0
+        for character in text {
+            if character == "," || character == "\n" {
+                result.append(character)
+                segmentCount = 0
+            } else if segmentCount < maxNameLength {
+                result.append(character)
+                segmentCount += 1
+            }
         }
         return result
     }

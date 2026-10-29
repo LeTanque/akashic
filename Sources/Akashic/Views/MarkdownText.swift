@@ -132,8 +132,10 @@ enum MarkdownRenderer {
         for index in lines.indices {
             var line = lines[index]
             if index + 1 < lines.count, shouldSoftBreak(after: line, before: lines[index + 1], inFence: false) {
-                if line.last != " ", line.last != "\t" {
-                    line += "  "
+                // Backslash hard break: trailing double spaces would be eaten by
+                // protectLiteralWhitespace (which turns runs of spaces into NBSPs).
+                if line.last != "\\" {
+                    line += "\\"
                 }
             }
             output.append(line)
@@ -168,7 +170,7 @@ enum MarkdownRenderer {
                 return true
             }
         }
-        return startsWithBlockMarker(Array(rest))
+        return startsWithBlockMarker(ArraySlice(rest))
     }
 
     /// macOS smart dash turns a typed `- ` into `– ` / `— `, which is not a

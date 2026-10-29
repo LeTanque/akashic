@@ -134,7 +134,7 @@ struct NoteEditorView: View {
         Binding(
             get: { session.form.tagInput },
             set: { newValue in
-                let capped = String(newValue.prefix(NoteTagNormalization.maxNameLength))
+                let capped = NoteTagNormalization.capTagInput(newValue)
                 session.mutateForm { $0.tagInput = capped }
             }
         )
@@ -163,15 +163,17 @@ private struct TagInputField: View {
             fontSize: AkashicFont.callout * textZoom,
             accessibilityLabel: "Tag input",
             onChange: {
-                if text.count > NoteTagNormalization.maxNameLength {
-                    text = String(text.prefix(NoteTagNormalization.maxNameLength))
+                let capped = NoteTagNormalization.capTagInput(text)
+                if capped != text {
+                    text = capped
                 }
                 if text.contains("\n") {
                     onCommit()
                 }
             }
         )
-        .frame(width: 168 * textZoom, minHeight: 28 * textZoom, maxHeight: 36 * textZoom)
+        .frame(width: 168 * textZoom)
+        .frame(minHeight: 28 * textZoom, maxHeight: 36 * textZoom)
         .padding(6)
         .cyberPanel()
         .onSubmit(onCommit)
