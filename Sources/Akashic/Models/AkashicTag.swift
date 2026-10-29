@@ -11,8 +11,8 @@ struct AkashicTag: Equatable, Sendable, Codable, Hashable, Identifiable {
     var nameKey: String { name.lowercased() }
 
     init(name: String, color: AkashicTagColor = .defaultForNewTag) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.name = trimmed
+        // Trim only: tags saved before the length limit keep their full name (and key).
+        self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         self.color = color
     }
 }
@@ -71,11 +71,49 @@ enum AkashicTagColor: String, CaseIterable, Sendable, Codable, Hashable, Identif
 }
 
 enum NoteTagNormalization {
+    static let maxNameLength = 24
+
+    static func clampedName(_ raw: String) -> String {
+        String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(maxNameLength))
+    }
+
+    static func nameWithinLimit(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed.count <= maxNameLength
+    }
+
+    /// Returns an error message when any tag name in API JSON exceeds the limit.
+    static func apiTagNameLengthError(in json: Any?) -> String? {
+        guard let json else { return nil }
+        let names = rawTagNames(from: json)
+        if names.contains(where: { !nameWithinLimit($0) }) {
+            return "tag name must be at most \(maxNameLength) characters"
+        }
+        return nil
+    }
+
+    private static func rawTagNames(from json: Any) -> [String] {
+        if let strings = json as? [String] {
+            return strings
+        }
+        if let objects = json as? [[String: Any]] {
+            return objects.compactMap { $0["name"] as? String }
+        }
+        if let mixed = json as? [Any] {
+            return mixed.flatMap { element -> [String] in
+                if let name = element as? String { return [name] }
+                if let dict = element as? [String: Any], let name = dict["name"] as? String { return [name] }
+                return []
+            }
+        }
+        return []
+    }
+
     static func normalizeNames(_ names: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
         for raw in names {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = clampedName(raw)
             guard !trimmed.isEmpty else { continue }
             let key = trimmed.lowercased()
             guard !seen.contains(key) else { continue }
@@ -89,12 +127,30 @@ enum NoteTagNormalization {
         var seen = Set<String>()
         var result: [AkashicTag] = []
         for tag in tags {
+            // Existing tags are not renamed; the limit applies to new names (input + API).
             let trimmed = tag.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
             let key = trimmed.lowercased()
             guard !seen.contains(key) else { continue }
             seen.insert(key)
             result.append(AkashicTag(name: trimmed, color: tag.color))
+        }
+        return result
+    }
+
+    /// Caps each comma/newline-separated segment of the tag input at `maxNameLength`,
+    /// keeping the separators so Return still commits a full-length tag.
+    static func capTagInput(_ text: String) -> String {
+        var result = ""
+        var segmentCount = 0
+        for character in text {
+            if character == "," || character == "\n" {
+                result.append(character)
+                segmentCount = 0
+            } else if segmentCount < maxNameLength {
+                result.append(character)
+                segmentCount += 1
+            }
         }
         return result
     }

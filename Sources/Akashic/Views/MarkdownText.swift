@@ -17,7 +17,9 @@ enum MarkdownRenderer {
         from markdown: String,
         basePointSize: CGFloat = AkashicFont.body
     ) -> AttributedString {
-        let source = protectLiteralWhitespace(normalizeSmartTypography(markdown))
+        let source = protectLiteralWhitespace(
+            applySoftLineBreaks(normalizeSmartTypography(markdown))
+        )
         var options = AttributedString.MarkdownParsingOptions()
         options.interpretedSyntax = .full
         options.failurePolicy = .returnPartiallyParsedIfPossible
@@ -103,6 +105,74 @@ enum MarkdownRenderer {
         return String(chars)
     }
 
+    /// GitHub-style soft breaks: a single newline inside a paragraph becomes a visible line break.
+    static func applySoftLineBreaks(_ markdown: String) -> String {
+        var lines: [String] = []
+        var inFence = false
+        for lineSub in markdown.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let line = String(lineSub)
+            let trimmedFence = line.trimmingCharacters(in: .whitespaces)
+            if inFence {
+                lines.append(line)
+                if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") {
+                    inFence = false
+                }
+                continue
+            }
+            if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") {
+                inFence = true
+                lines.append(line)
+                continue
+            }
+            lines.append(line)
+        }
+
+        var output: [String] = []
+        output.reserveCapacity(lines.count)
+        for index in lines.indices {
+            var line = lines[index]
+            if index + 1 < lines.count, shouldSoftBreak(after: line, before: lines[index + 1], inFence: false) {
+                // Backslash hard break: trailing double spaces would be eaten by
+                // protectLiteralWhitespace (which turns runs of spaces into NBSPs).
+                if line.last != "\\" {
+                    line += "\\"
+                }
+            }
+            output.append(line)
+        }
+        return output.joined(separator: "\n")
+    }
+
+    private static func shouldSoftBreak(after line: String, before nextLine: String, inFence: Bool) -> Bool {
+        guard !inFence else { return false }
+        guard !line.isEmpty, !nextLine.isEmpty else { return false }
+        guard !lineStartsBlock(line), !lineStartsBlock(nextLine) else { return false }
+        return true
+    }
+
+    private static func lineStartsBlock(_ line: String) -> Bool {
+        var index = line.startIndex
+        while index < line.endIndex, line[index] == " " || line[index] == "\t" {
+            index = line.index(after: index)
+        }
+        let rest = line[index...]
+        guard !rest.isEmpty else { return false }
+        let trimmedFence = line.trimmingCharacters(in: .whitespaces)
+        if trimmedFence.hasPrefix("```") || trimmedFence.hasPrefix("~~~") { return true }
+        if rest.first == "#" {
+            var hashCount = 0
+            var cursor = rest.startIndex
+            while cursor < rest.endIndex, rest[cursor] == "#" {
+                hashCount += 1
+                cursor = rest.index(after: cursor)
+            }
+            if hashCount <= 6, cursor < rest.endIndex, rest[cursor] == " " {
+                return true
+            }
+        }
+        return startsWithBlockMarker(ArraySlice(rest))
+    }
+
     /// macOS smart dash turns a typed `- ` into `– ` / `— `, which is not a
     /// CommonMark list marker. Repair those only at line start so already-saved
     /// titles still parse as lists. Mid-line dashes are left alone.
@@ -151,12 +221,12 @@ enum MarkdownRenderer {
     ) -> AttributedString {
         var output = AttributedString()
         var emittedMarkerForItem: Int?
-        var previousParagraphID: Int?
+        var previousBlockBoundary: BlockBoundary?
 
         for run in source.runs {
             var fragment = AttributedString(source[run.range])
             let intent = run.presentationIntent
-            let paragraphID = paragraphIdentity(of: intent)
+            let blockBoundary = blockBoundary(of: intent)
 
             if let headerLevel = headerLevel(of: intent) {
                 applyHeadingStyle(&fragment, level: headerLevel, basePointSize: basePointSize)
@@ -171,16 +241,16 @@ enum MarkdownRenderer {
                     output += AttributedString(list.marker)
                     emittedMarkerForItem = list.itemID
                 }
-                previousParagraphID = nil
+                previousBlockBoundary = nil
             } else {
-                if let paragraphID, paragraphID != previousParagraphID, emittedMarkerForItem == nil {
-                    if !output.characters.isEmpty, !endsWithNewline(output), !startsWithNewline(fragment) {
-                        output += AttributedString("\n\n")
-                    }
+                if emittedMarkerForItem == nil,
+                   let blockBoundary,
+                   blockBoundary != previousBlockBoundary {
+                    insertBlockGap(into: &output, before: fragment)
                 }
                 emittedMarkerForItem = nil
-                if paragraphID != nil {
-                    previousParagraphID = paragraphID
+                if blockBoundary != nil {
+                    previousBlockBoundary = blockBoundary
                 }
             }
 
@@ -188,6 +258,18 @@ enum MarkdownRenderer {
         }
 
         return output
+    }
+
+    private enum BlockBoundary: Equatable {
+        case paragraph(Int)
+        case header(Int)
+    }
+
+    private static func insertBlockGap(into output: inout AttributedString, before fragment: AttributedString) {
+        guard !output.characters.isEmpty else { return }
+        if endsWithNewline(output) { return }
+        if startsWithNewline(fragment) { return }
+        output += AttributedString("\n\n")
     }
 
     private static func applyHeadingStyle(
@@ -290,12 +372,25 @@ enum MarkdownRenderer {
         return first == "\n" || first == "\r"
     }
 
-    private static func paragraphIdentity(of intent: PresentationIntent?) -> Int? {
+    private static func blockBoundary(of intent: PresentationIntent?) -> BlockBoundary? {
         guard let intent else { return nil }
+        var headerIdentity: Int?
+        var paragraphIdentity: Int?
         for component in intent.components {
-            if case .paragraph = component.kind {
-                return component.identity
+            switch component.kind {
+            case .header:
+                headerIdentity = component.identity
+            case .paragraph:
+                paragraphIdentity = component.identity
+            default:
+                break
             }
+        }
+        if let headerIdentity {
+            return .header(headerIdentity)
+        }
+        if let paragraphIdentity {
+            return .paragraph(paragraphIdentity)
         }
         return nil
     }

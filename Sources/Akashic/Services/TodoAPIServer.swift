@@ -153,6 +153,9 @@ final class TodoAPIServer: @unchecked Sendable {
                 return json(["error": "title required"], status: .badRequest)
             }
             let body = object["body"] as? String ?? ""
+            if let tagError = NoteTagNormalization.apiTagNameLengthError(in: object["tags"]) {
+                return json(["error": tagError], status: .badRequest)
+            }
             let tags = NoteTagAPIDecoding.decodeTags(from: object["tags"])
             let draft = NoteItem.new(title: String(trimmed.prefix(200)), body: body, tags: tags)
             let item = await MainActor.run {
@@ -169,6 +172,10 @@ final class TodoAPIServer: @unchecked Sendable {
             let bodyData = try await request.bodyData
             guard let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
                 return json(["error": "invalid JSON body"], status: .badRequest)
+            }
+            if object["tags"] != nil,
+               let tagError = NoteTagNormalization.apiTagNameLengthError(in: object["tags"]) {
+                return json(["error": tagError], status: .badRequest)
             }
             let updated = await MainActor.run { () -> NoteItem? in
                 guard var note = noteStore.note(id: id) else { return nil }
