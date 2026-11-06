@@ -77,7 +77,11 @@ final class AkashicVaultController: ObservableObject {
     func start() {
         apiService.setLocked(true)
         presentation = .loading
-        Task { await evaluateVaultState() }
+        Task {
+            // Defer bind until after app finish-launching so FlyingFox accepts the port.
+            AkashicAPIBootstrap.startLockedOnly(apiService: apiService)
+            await evaluateVaultState()
+        }
     }
 
     private func evaluateVaultState() async {
@@ -148,6 +152,16 @@ final class AkashicVaultController: ObservableObject {
             pendingDataKey = dataKey
             setupRecoveryDisplay = recoveryDisplay
             setupOtpauthURI = otpauth
+            // DoD / isolated-data helper: when AKASHIC_DATA_DIR is set, write otpauth URI
+            // so automated verification can compute a TOTP without scanning the QR.
+            if ProcessInfo.processInfo.environment[AkashicPaths.dataDirectoryEnvironmentKey] != nil {
+                let dump = (try? AkashicPaths.applicationSupportFolder())?
+                    .appendingPathComponent("dod-setup-otpauth.txt")
+                if let dump {
+                    let body = otpauth + "\n" + recoveryDisplay + "\n"
+                    try? body.data(using: .utf8)?.write(to: dump, options: .atomic)
+                }
+            }
             firstRunStep = .codes
         } catch {
             setupError = error.localizedDescription
@@ -278,7 +292,6 @@ final class AkashicVaultController: ObservableObject {
     }
 
     func lock() {
-        AkashicAPIBootstrap.stop()
         todoStore = nil
         noteStore = nil
         presentation = .unlock
@@ -287,6 +300,8 @@ final class AkashicVaultController: ObservableObject {
         unlockRecoveryCode = ""
         unlockError = nil
         apiService.setLocked(true)
+        // Keep localhost API up: /health 200, /api/* 423 (no DB handles).
+        AkashicAPIBootstrap.startLockedOnly(apiService: apiService)
         idleMonitor?.stop()
         idleMonitor = nil
     }

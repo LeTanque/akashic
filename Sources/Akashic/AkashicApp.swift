@@ -62,6 +62,12 @@ struct AkashicApp: App {
                 NotificationCenter.default.post(name: .akashicOpenSettings, object: nil)
             }
             .keyboardShortcut(",", modifiers: .command)
+            Divider()
+            Button("Lock") {
+                NotificationCenter.default.post(name: .akashicRequestLock, object: nil)
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+            .disabled(root.vault.presentation != .ready)
         }
     }
 

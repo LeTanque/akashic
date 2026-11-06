@@ -27,6 +27,38 @@ final class TodoAPIServer: @unchecked Sendable {
         }
     }
 
+    /// Locked vault: `/health` stays 200; all `/api/*` return 423. No DB handles held.
+    func startLockedOnly(apiService: AkashicAPIService) {
+        stop()
+        let port = Self.port
+        runTask = Task.detached(priority: .utility) {
+            guard let address = try? sockaddr_in.inet(ip4: "127.0.0.1", port: port) else {
+                NSLog("Akashic API server: failed to bind 127.0.0.1:%d", port)
+                return
+            }
+            let server = HTTPServer(address: address, logger: .disabled)
+            await server.appendRoute("GET /health") { _ in
+                json(["status": "ok", "database": "locked", "app": "akashic"])
+            }
+            let lockedPaths = [
+                "GET /api/todos", "POST /api/todos", "PATCH /api/todos/:id", "DELETE /api/todos/:id",
+                "GET /api/notes", "GET /api/notes/:id", "POST /api/notes", "PATCH /api/notes/:id", "DELETE /api/notes/:id",
+                "GET /api/tags", "PATCH /api/tags/:name",
+            ]
+            for path in lockedPaths {
+                await server.appendRoute(HTTPRoute(path)) { _ in
+                    _ = apiService.isLockedForAPI()
+                    return Self.lockedResponse()
+                }
+            }
+            do {
+                try await server.run()
+            } catch {
+                NSLog("Akashic locked API server stopped: \(error.localizedDescription)")
+            }
+        }
+    }
+
     func stop() {
         runTask?.cancel()
         runTask = nil
