@@ -32,6 +32,8 @@ final class AkashicVaultController: ObservableObject {
     @Published var setupRecoveryDisplay = ""
     @Published var setupError: String?
     @Published private(set) var isCompletingFirstRun = false
+    /// Set when rollback after a failed finish cannot restore a safe on-disk state (requires manual recovery).
+    @Published private(set) var setupRequiresManualRecoveryReason: String?
 
     private var pendingMetadata: LocalSecurityMetadata?
     private var pendingDataKey: Data?
@@ -72,6 +74,11 @@ final class AkashicVaultController: ObservableObject {
         } else {
             autoLockIdleMinutes = 15
         }
+    }
+
+    /// Package tests: verify localhost API stays locked during failed setup.
+    internal var testingIsAPILocked: Bool {
+        apiService.isLocked
     }
 
     func start() {
@@ -122,6 +129,7 @@ final class AkashicVaultController: ObservableObject {
         setupOtpauthURI = ""
         setupRecoveryDisplay = ""
         setupTOTPCode = ""
+        setupRequiresManualRecoveryReason = nil
         pendingMetadata = nil
         pendingDataKey = nil
     }
@@ -129,6 +137,7 @@ final class AkashicVaultController: ObservableObject {
     /// Step 1 → 2: validate credentials and generate recovery code + TOTP secret (shown once).
     func advanceFirstRunToCodes() {
         setupError = nil
+        setupRequiresManualRecoveryReason = nil
         let trimmedUser = setupUsername.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedUser.isEmpty else {
             setupError = "Username is required."
@@ -178,6 +187,7 @@ final class AkashicVaultController: ObservableObject {
         firstRunStep = .codes
         setupTOTPCode = ""
         setupError = nil
+        setupRequiresManualRecoveryReason = nil
     }
 
     /// Used by package tests to compute the expected TOTP for the pending setup secrets.
@@ -197,6 +207,11 @@ final class AkashicVaultController: ObservableObject {
         defer { isCompletingFirstRun = false }
 
         setupError = nil
+        if setupRequiresManualRecoveryReason != nil {
+            setupError = setupRequiresManualRecoveryReason
+            return
+        }
+        setupRequiresManualRecoveryReason = nil
         guard let metadata = pendingMetadata, let dataKey = pendingDataKey else {
             setupError = "Setup expired; go back and regenerate codes."
             return
@@ -233,27 +248,28 @@ final class AkashicVaultController: ObservableObject {
         var migrationPlaintextBackupURL: URL?
         var createdFreshEncryptedDB = false
 
+        let dbExists = FileManager.default.fileExists(atPath: dbURL.path)
         let isPlain: Bool
-        do {
-            isPlain =
-                FileManager.default.fileExists(atPath: dbURL.path)
-                && try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: dbURL)
-        } catch {
-            setupError =
-                "Could not inspect your existing database file: \(error.localizedDescription)"
-            return
+        if !dbExists {
+            isPlain = false
+        } else {
+            do {
+                isPlain = try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: dbURL)
+            } catch {
+                setupError =
+                    "Could not inspect your existing database file: \(error.localizedDescription)"
+                return
+            }
         }
 
         if isPlain {
             let tmp = folder.appendingPathComponent(".akashic-encrypt-migrate-\(UUID().uuidString).sqlite")
-            if FileManager.default.fileExists(atPath: tmp.path) {
-                do {
-                    try FileManager.default.removeItem(at: tmp)
-                } catch {
-                    setupError =
-                        "Could not prepare database encryption (temp file): \(error.localizedDescription)"
-                    return
-                }
+            do {
+                try SQLiteDiskBundle.removeAllIfPresent(main: tmp)
+            } catch {
+                setupError =
+                    "Could not prepare database encryption (temp file): \(error.localizedDescription)"
+                return
             }
             do {
                 try AkashicPlaintextMigration.exportPlaintextToEncrypted(
@@ -267,15 +283,26 @@ final class AkashicVaultController: ObservableObject {
                     backupDirectory: folder
                 )
             } catch {
-                try? FileManager.default.removeItem(at: tmp)
-                try? rollbackPlaintextMigration(liveDB: dbURL, backupURL: migrationPlaintextBackupURL)
-                migrationPlaintextBackupURL = nil
-                setupError = Self.migrationSetupErrorMessage(for: error)
+                do {
+                    try SQLiteDiskBundle.removeAllIfPresent(main: tmp)
+                } catch { _ in }
+                if let backup = migrationPlaintextBackupURL {
+                    Self.handleManualRecoveryIfNeeded(
+                        result: Result { try rollbackPlaintextMigration(liveDB: dbURL, backupURL: backup) },
+                        setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
+                        setupError: &setupError,
+                        detail: error.localizedDescription
+                    )
+                    migrationPlaintextBackupURL = nil
+                }
+                if setupRequiresManualRecoveryReason == nil {
+                    setupError = Self.migrationSetupErrorMessage(for: error)
+                }
                 return
             }
-        } else if !FileManager.default.fileExists(atPath: dbURL.path) {
+        } else if !dbExists {
             do {
-                _ = try TodoDatabase.createEncryptedEmpty(at: dbURL, passphrase: dataKey)
+                try Self.createEncryptedEmptyAtomically(at: dbURL, passphrase: dataKey)
                 createdFreshEncryptedDB = true
             } catch {
                 setupError =
@@ -291,26 +318,46 @@ final class AkashicVaultController: ObservableObject {
         do {
             try LocalSecurityMetadataStore.save(metadata)
         } catch {
-            try? undoFirstRunDiskStateAfterMetadataSaveFailure(
-                dbURL: dbURL,
-                migrationPlaintextBackupURL: migrationPlaintextBackupURL,
-                createdFreshEncryptedDB: createdFreshEncryptedDB
+            let rollback = Result {
+                try undoFirstRunDiskStateAfterMetadataSaveFailure(
+                    dbURL: dbURL,
+                    migrationPlaintextBackupURL: migrationPlaintextBackupURL,
+                    createdFreshEncryptedDB: createdFreshEncryptedDB
+                )
+            }
+            Self.handleManualRecoveryIfNeeded(
+                result: rollback,
+                setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
+                setupError: &setupError,
+                detail: error.localizedDescription
             )
-            setupError =
-                "Could not save security metadata (akashic-security.json): \(error.localizedDescription)"
+            if setupRequiresManualRecoveryReason == nil {
+                setupError =
+                    "Could not save security metadata (akashic-security.json): \(error.localizedDescription)"
+            }
             return
         }
 
         do {
             try finishUnlock(dataKey: dataKey, metadata: metadata)
         } catch {
-            try? undoFirstRunAfterMetadataButBeforeUnlock(
-                dbURL: dbURL,
-                migrationPlaintextBackupURL: migrationPlaintextBackupURL,
-                createdFreshEncryptedDB: createdFreshEncryptedDB
+            let rollback = Result {
+                try undoFirstRunAfterMetadataButBeforeUnlock(
+                    dbURL: dbURL,
+                    migrationPlaintextBackupURL: migrationPlaintextBackupURL,
+                    createdFreshEncryptedDB: createdFreshEncryptedDB
+                )
+            }
+            Self.handleManualRecoveryIfNeeded(
+                result: rollback,
+                setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
+                setupError: &setupError,
+                detail: error.localizedDescription
             )
-            setupError =
-                "Could not open the encrypted database: \(error.localizedDescription)"
+            if setupRequiresManualRecoveryReason == nil {
+                setupError =
+                    "Could not open the encrypted database: \(error.localizedDescription)"
+            }
             return
         }
 
@@ -318,12 +365,8 @@ final class AkashicVaultController: ObservableObject {
         pendingDataKey = nil
     }
 
-    private func rollbackPlaintextMigration(liveDB: URL, backupURL: URL?) throws {
-        guard let backupURL else { return }
-        if FileManager.default.fileExists(atPath: liveDB.path) {
-            try FileManager.default.removeItem(at: liveDB)
-        }
-        try FileManager.default.moveItem(at: backupURL, to: liveDB)
+    private func rollbackPlaintextMigration(liveDB: URL, backupURL: URL) throws {
+        try SQLiteDiskBundle.moveBundle(from: backupURL, to: liveDB)
     }
 
     private func undoFirstRunDiskStateAfterMetadataSaveFailure(
@@ -333,8 +376,8 @@ final class AkashicVaultController: ObservableObject {
     ) throws {
         if let backup = migrationPlaintextBackupURL {
             try rollbackPlaintextMigration(liveDB: dbURL, backupURL: backup)
-        } else if createdFreshEncryptedDB, FileManager.default.fileExists(atPath: dbURL.path) {
-            try FileManager.default.removeItem(at: dbURL)
+        } else if createdFreshEncryptedDB {
+            try SQLiteDiskBundle.removeAllIfPresent(main: dbURL)
         }
         try LocalSecurityMetadataStore.deleteIfPresent()
     }
@@ -346,17 +389,45 @@ final class AkashicVaultController: ObservableObject {
     ) throws {
         try LocalSecurityMetadataStore.deleteIfPresent()
         if let backup = migrationPlaintextBackupURL {
-            if FileManager.default.fileExists(atPath: dbURL.path) {
-                try FileManager.default.removeItem(at: dbURL)
-            }
-            try FileManager.default.moveItem(at: backup, to: dbURL)
-        } else if createdFreshEncryptedDB, FileManager.default.fileExists(atPath: dbURL.path) {
-            try FileManager.default.removeItem(at: dbURL)
+            try SQLiteDiskBundle.removeAllIfPresent(main: dbURL)
+            try SQLiteDiskBundle.moveBundle(from: backup, to: dbURL)
+        } else if createdFreshEncryptedDB {
+            try SQLiteDiskBundle.removeAllIfPresent(main: dbURL)
         }
     }
 
     private static func migrationSetupErrorMessage(for error: Error) -> String {
         "Could not encrypt or replace your existing database: \(error.localizedDescription). Your original file was left unchanged."
+    }
+
+    /// Creates `akashic.sqlite` (and sidecars) in one shot; removes partial files on failure.
+    private static func createEncryptedEmptyAtomically(at dbURL: URL, passphrase: Data) throws {
+        let tmp = dbURL.deletingLastPathComponent()
+            .appendingPathComponent(".akashic-new-encrypted-\(UUID().uuidString).sqlite")
+        do {
+            let q = try TodoDatabase.createEncryptedEmpty(at: tmp, passphrase: passphrase)
+            try q.close()
+            try SQLiteDiskBundle.moveBundle(from: tmp, to: dbURL)
+        } catch {
+            try? SQLiteDiskBundle.removeAllIfPresent(main: tmp)
+            throw error
+        }
+    }
+
+    private static func handleManualRecoveryIfNeeded(
+        result: Result<Void, Error>,
+        setupRequiresManualRecoveryReason: inout String?,
+        setupError: inout String?,
+        detail: String
+    ) {
+        switch result {
+        case .success:
+            break
+        case .failure(let rollbackError):
+            setupRequiresManualRecoveryReason =
+                "Setup could not roll back safely after: \(detail). Rollback error: \(rollbackError.localizedDescription). Check the Akashic data folder; you may need to restore from backup before retrying."
+            setupError = setupRequiresManualRecoveryReason
+        }
     }
 
     func unlock() async {

@@ -5,6 +5,8 @@ import GRDB
 public enum TodoDatabaseTestingHooks {
     public nonisolated(unsafe) static var createEncryptedEmptyFailure: Error?
     public nonisolated(unsafe) static var openEncryptedFailure: Error?
+    /// First `openEncrypted` throws this once, then behaves normally (tests rollback + retry).
+    public nonisolated(unsafe) static var openEncryptedFailOnce: Error?
 }
 
 public enum TodoDatabase {
@@ -29,6 +31,10 @@ public enum TodoDatabase {
 
     /// Opens the on-disk database with the SQLCipher data key, migrates, returns a queue.
     public static func openEncrypted(at url: URL, passphrase: Data) throws -> DatabaseQueue {
+        if let once = TodoDatabaseTestingHooks.openEncryptedFailOnce {
+            TodoDatabaseTestingHooks.openEncryptedFailOnce = nil
+            throw once
+        }
         if let err = TodoDatabaseTestingHooks.openEncryptedFailure {
             throw err
         }

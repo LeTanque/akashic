@@ -22,7 +22,7 @@ struct AkashicFirstRunView: View {
             if let err = vault.setupError {
                 Text(err)
                     .font(.caption)
-                    .foregroundStyle(CyberpunkTheme.neonOrange)
+                    .foregroundStyle(vault.setupRequiresManualRecoveryReason != nil ? Color.red : CyberpunkTheme.neonOrange)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }

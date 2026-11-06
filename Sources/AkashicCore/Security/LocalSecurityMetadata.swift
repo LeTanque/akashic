@@ -48,8 +48,13 @@ public enum LocalSecurityMetadataStore {
     }
 
     public static func save(_ metadata: LocalSecurityMetadata, to url: URL? = nil) throws {
+        LocalSecurityMetadataStoreTestingHooks.saveEntryCount += 1
         if let err = LocalSecurityMetadataStoreTestingHooks.saveFailure {
             throw err
+        }
+        let delay = LocalSecurityMetadataStoreTestingHooks.saveDelayNanoseconds
+        if delay > 0 {
+            Thread.sleep(forTimeInterval: Double(delay) / 1_000_000_000.0)
         }
         let url = try url ?? AkashicPaths.securityMetadataURL()
         let encoder = JSONEncoder()
@@ -66,6 +71,10 @@ public enum LocalSecurityMetadataStore {
 /// Test-only hooks (package tests). Must remain `nil` in production code paths.
 public enum LocalSecurityMetadataStoreTestingHooks {
     public nonisolated(unsafe) static var saveFailure: Error?
+    /// When > 0, `save` sleeps before writing (tests duplicate Finish / concurrency).
+    public nonisolated(unsafe) static var saveDelayNanoseconds: UInt64 = 0
+    /// Incremented on each `save` entry (tests verify single commit).
+    public nonisolated(unsafe) static var saveEntryCount: Int = 0
 }
 
 /// Test-only hooks for first-run plaintext migration (package tests).
