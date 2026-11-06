@@ -7,7 +7,6 @@ final class AkashicSettingsStore: ObservableObject {
     static let defaultMenuBarSymbol = "sparkles"
 
     private static let menuBarSymbolKey = "akashic.settings.menuBarSymbol"
-    private static let showSystemInformationKey = "akashic.settings.showSystemInformation"
     private static let showAkashicLogoKey = "akashic.settings.showAkashicLogo"
     private static let showInDockKey = "akashic.settings.showInDockAndAppSwitcher"
 
@@ -33,12 +32,6 @@ final class AkashicSettingsStore: ObservableObject {
                 return
             }
             defaults.set(normalized, forKey: Self.menuBarSymbolKey)
-        }
-    }
-
-    @Published var showSystemInformation: Bool {
-        didSet {
-            defaults.set(showSystemInformation, forKey: Self.showSystemInformationKey)
         }
     }
 
@@ -69,12 +62,6 @@ final class AkashicSettingsStore: ObservableObject {
             menuBarSymbolName = Self.defaultMenuBarSymbol
         }
 
-        if defaults.object(forKey: Self.showSystemInformationKey) == nil {
-            showSystemInformation = true
-        } else {
-            showSystemInformation = defaults.bool(forKey: Self.showSystemInformationKey)
-        }
-
         if defaults.object(forKey: Self.showAkashicLogoKey) == nil {
             showAkashicLogo = true
         } else {
@@ -97,14 +84,7 @@ final class AkashicSettingsStore: ObservableObject {
     }
 }
 
-/// Pure gate for live machine metrics and Cursor / agent quota polling.
-enum MetricsMonitoringLifecycle {
-    static func shouldMonitor(showSystemInformation: Bool) -> Bool {
-        showSystemInformation
-    }
-}
-
-/// Fixed header column widths so toggling stats/logo does not reflow chrome.
+/// Fixed header column widths so toggling logo or trimming trailing controls does not reflow chrome.
 enum HeaderAppearanceLayout {
     static let leftZoneWidth: CGFloat = 340
     static let centerZoneWidth: CGFloat = 220

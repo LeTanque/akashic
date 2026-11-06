@@ -45,9 +45,7 @@ Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar
 
 While Akashic is running, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
 
-The main-window **top header chrome** (`CyberHeaderStrip`) is three independent alignments: a live three-row metrics strip **flush left** (DISK + SYS, then CPU + CA + optional BOT, then **CM** / **OM** Cursor quota percents), the Akashic wordmark **centered in the window**, and +/sidebar toggles **flush right**. Host and agent rows stay visible — the strip does not drop SYS or CPU when the header is tight. It is not a side panel or bottom inset, and the menu-bar popover does not show it.
-
-**Cursor quota (CM / OM)** mirrors the Cursor **Plan & Usage** dashboard: percent **used** for Cursor Models and Other Models. Akashic reads the IDE session from `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb`, then calls the unofficial `GET https://cursor.com/api/usage-summary` with a `WorkosCursorSessionToken` cookie (same approach as [MetricsWidget](https://github.com/LeTanque/metric-widget)). If that endpoint fails, it falls back to `autoPercentUsed` / `apiPercentUsed` on `GetCurrentPeriodUsage`. Without a signed-in Cursor session the HUD shows `CM —` / `OM —`. Quota refreshes about every two minutes (not on the 1 Hz host sampler).
+The main-window **top header chrome** (`CyberHeaderStrip`) keeps the Akashic wordmark **centered in the window** and the add/sidebar controls on the **trailing** edge; the leading slot is empty space so the logo stays optically centered.
 
 | Method | Path | Notes |
 |--------|------|--------|
@@ -56,10 +54,8 @@ The main-window **top header chrome** (`CyberHeaderStrip`) is three independent 
 | `POST` | `/api/todos` | Body: `{ "title", "description?", "priority?" }` → `201` |
 | `PATCH` | `/api/todos/:id` | Body may include `title`, `description`, `completed`, `priority`, `complete_by` |
 | `DELETE` | `/api/todos/:id` | `204` on success |
-| `PUT` | `/v1/agent-metrics` | Ingest `{ "activeCloudAgents", "runningCloudAgents?", "activeBots?", "updatedAt" }` |
-| `GET` | `/v1/agent-metrics` | Last ingested payload, or `404` if none yet |
 
-Todo `id` values are UUID strings. `updatedAt` is ISO-8601. The header shows `CA n` only while that payload’s `updatedAt` is younger than **7 minutes**; otherwise `CA —` (a missing or stale feed is not shown as `0`). The extra two minutes cover Lou’s ~5-minute Grok Bot push interval.
+Todo `id` values are UUID strings.
 
 Examples:
 
@@ -69,10 +65,6 @@ curl -s 'http://localhost:4311/api/todos?status=active'
 curl -s -X POST http://localhost:4311/api/todos \
   -H 'Content-Type: application/json' \
   -d '{"title":"Ship the README","priority":"high"}'
-curl -s -X PUT http://localhost:4311/v1/agent-metrics \
-  -H 'Content-Type: application/json' \
-  -d '{"activeCloudAgents":2,"runningCloudAgents":[{"id":"bc-example","title":"short title","status":"running"}],"activeBots":null,"updatedAt":"2026-09-26T02:31:00Z"}'
-curl -s http://localhost:4311/v1/agent-metrics
 ```
 
 If nothing answers on `:4311`, start Akashic first (the server starts with the app).
