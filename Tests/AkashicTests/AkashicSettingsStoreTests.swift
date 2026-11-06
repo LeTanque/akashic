@@ -23,7 +23,6 @@ final class AkashicSettingsStoreTests: XCTestCase {
     func testDefaultsMatchExistingUserExpectations() {
         let store = AkashicSettingsStore(defaults: defaults)
         XCTAssertEqual(store.menuBarSymbolName, AkashicSettingsStore.defaultMenuBarSymbol)
-        XCTAssertTrue(store.showSystemInformation)
         XCTAssertTrue(store.showAkashicLogo)
         XCTAssertFalse(store.showInDockAndAppSwitcher)
     }
@@ -31,13 +30,11 @@ final class AkashicSettingsStoreTests: XCTestCase {
     func testPersistenceRoundTrip() {
         let store = AkashicSettingsStore(defaults: defaults)
         store.menuBarSymbolName = "bolt.fill"
-        store.showSystemInformation = false
         store.showAkashicLogo = false
         store.showInDockAndAppSwitcher = true
 
         let reloaded = AkashicSettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.menuBarSymbolName, "bolt.fill")
-        XCTAssertFalse(reloaded.showSystemInformation)
         XCTAssertFalse(reloaded.showAkashicLogo)
         XCTAssertTrue(reloaded.showInDockAndAppSwitcher)
     }
@@ -46,11 +43,6 @@ final class AkashicSettingsStoreTests: XCTestCase {
         defaults.set("not.a.real.symbol", forKey: "akashic.settings.menuBarSymbol")
         let store = AkashicSettingsStore(defaults: defaults)
         XCTAssertEqual(store.menuBarSymbolName, AkashicSettingsStore.defaultMenuBarSymbol)
-    }
-
-    func testMetricsMonitoringLifecycleGate() {
-        XCTAssertTrue(MetricsMonitoringLifecycle.shouldMonitor(showSystemInformation: true))
-        XCTAssertFalse(MetricsMonitoringLifecycle.shouldMonitor(showSystemInformation: false))
     }
 
     func testHeaderZoneWidthsAreFixed() {

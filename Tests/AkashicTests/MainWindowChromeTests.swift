@@ -47,7 +47,7 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(CyberpunkTheme.windowTopChromeVeilHeight, 28)
     }
 
-    /// Three fixed header zones — stats slot, logo slot, buttons — so toggles never reflow chrome.
+    /// Three fixed header zones — left spacer, logo slot, buttons — so toggles never reflow chrome.
     func testHeaderStripUsesFixedThreeZoneLayout() throws {
         let themeURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -65,32 +65,9 @@ final class MainWindowChromeTests: XCTestCase {
         XCTAssertTrue(strip.contains("HeaderAppearanceLayout.centerZoneWidth"))
         XCTAssertTrue(strip.contains("HeaderAppearanceLayout.rightZoneWidth"))
         XCTAssertTrue(strip.contains("settings.showAkashicLogo"))
-        XCTAssertTrue(strip.contains("HeaderMetricsStrip()"))
+        XCTAssertTrue(strip.contains("Color.clear"))
         XCTAssertTrue(strip.contains("WindowDragRegion()"))
         XCTAssertFalse(strip.contains("layoutPriority"))
-    }
-
-    /// The main-window HUD must always render both machine + usage rows. ViewThatFits
-    /// falling back to short rows is the PR #10 bug.
-    func testHeaderMetricsStripAlwaysShowsFullRows() throws {
-        let stripURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/Akashic/Views/HeaderMetricsStrip.swift")
-        let source = try String(contentsOf: stripURL, encoding: .utf8)
-        XCTAssertTrue(
-            source.contains("stacked(lines.full)"),
-            "Header metrics must render the full machine + Cursor usage rows"
-        )
-        XCTAssertFalse(
-            source.contains("ViewThatFits("),
-            "ViewThatFits must not drop SYS/CPU when the leading column is tight"
-        )
-        XCTAssertFalse(source.contains("lines.short"), "short row pair omits SYS/CPU")
-        XCTAssertFalse(source.contains("lines.minimal"), "minimal row omits SYS/CPU")
-        XCTAssertFalse(source.contains("lines.compact"), "compact row omits SYS")
-        XCTAssertFalse(source.contains("AgentMetricsStore"), "CA feeder must not drive the header HUD")
     }
 
     /// AppKit throws (SIGTRAP via `+[NSApplication _crashOnException:]`) if these

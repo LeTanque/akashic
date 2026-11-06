@@ -38,13 +38,13 @@ enum CyberpunkTheme {
     static let windowTopChromeVeilOpacity: Double = 0.45
     /// Typical ~28pt titlebar plus the 16pt content inset, fading into the header.
     static let windowTopChromeVeilHeight: CGFloat = 52
-    /// Main window header wildstyle wordmark height (tall enough for three metric rows beside it).
+    /// Main window header wildstyle wordmark height.
     static let headerWordmarkHeight: CGFloat = 48
     /// Optical vertical nudge (wordmark reads low vs square header buttons).
     static let headerWordmarkVerticalOffset: CGFloat = -3
-    /// Tight pad above/below the wordmark–metrics–buttons row (not a tall empty band).
+    /// Tight pad above/below the wordmark row and trailing header buttons (not a tall empty band).
     static let headerStripVerticalPadding: CGFloat = 4
-    /// Header row sits on the neon content inset; no extra leading inset before metrics.
+    /// Header row sits on the neon content inset.
     static let headerStripLeadingPadding: CGFloat = 0
     /// Trailing icon buttons align to the same content edge as the neon inset.
     static let headerStripTrailingPadding: CGFloat = 0
@@ -214,8 +214,8 @@ struct CyberHeaderStrip<Trailing: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             // Logo slot is centered in the window (ZStack), not in the gap
-            // between unequal side zones. Stats and buttons sit in fixed-width
-            // side zones, so toggling stats/logo never moves anything.
+            // between unequal side zones. Leading and trailing sit in fixed-width
+            // slots so toggling the logo never moves the right-side buttons.
             ZStack {
                 Group {
                     if settings.showAkashicLogo {
@@ -229,8 +229,9 @@ struct CyberHeaderStrip<Trailing: View>: View {
                 .allowsHitTesting(false)
 
                 HStack(alignment: .center, spacing: 0) {
-                    HeaderMetricsStrip()
-                        .frame(width: HeaderAppearanceLayout.leftZoneWidth, alignment: .leading)
+                    Color.clear
+                        .frame(width: HeaderAppearanceLayout.leftZoneWidth, height: CyberpunkTheme.headerWordmarkHeight)
+                        .allowsHitTesting(false)
 
                     Spacer(minLength: 8)
                         .allowsHitTesting(false)
