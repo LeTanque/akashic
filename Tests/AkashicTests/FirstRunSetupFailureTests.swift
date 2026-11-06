@@ -9,6 +9,8 @@ import XCTest
 final class FirstRunSetupFailureTests: XCTestCase {
     private var savedDataDir: String?
     private var tempRoot: URL!
+    /// Kept open so SQLite does not run a final checkpoint that deletes `-wal` before migration/export runs.
+    private var walFixtureWriterQueue: DatabaseQueue?
 
     override func setUp() async throws {
         try await super.setUp()
@@ -18,6 +20,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         setenv(AkashicPaths.dataDirectoryEnvironmentKey, tempRoot.path, 1)
         clearTestHooks()
+        try releaseWalFixtureConnection()
     }
 
     override func tearDown() async throws {
@@ -28,6 +31,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         }
         savedDataDir = nil
         clearTestHooks()
+        try? releaseWalFixtureConnection()
         if let tempRoot {
             try? FileManager.default.removeItem(at: tempRoot)
         }
@@ -51,6 +55,13 @@ final class FirstRunSetupFailureTests: XCTestCase {
         SetupMigrationJournalTestingHooks.failOnSaveInvocation = nil
         SetupManualRecoveryStoreTestingHooks.primarySaveFailure = nil
         try? SetupManualRecoveryUserDefaultsStore.clear()
+    }
+
+    private func releaseWalFixtureConnection() throws {
+        if let q = walFixtureWriterQueue {
+            try q.close()
+            walFixtureWriterQueue = nil
+        }
     }
 
     private func startVaultForFirstRun(_ vault: AkashicVaultController) async {
@@ -86,42 +97,79 @@ final class FirstRunSetupFailureTests: XCTestCase {
         return URL(fileURLWithPath: u.path + "-wal", isDirectory: false)
     }
 
-    /// Plain DB with WAL journal (real `-wal` sidecar on disk after at least one write).
+    /// Plain DB with WAL journal. Leaves **`walFixtureWriterQueue`** open with a committed writer so `-wal`
+    /// remains on disk (closing the last connection can checkpoint and remove `-wal`). Call
+    /// **`releaseWalFixtureConnection()`** before code that must open the DB exclusively (migration).
     private func installWALPlaintextDatabaseFixture(
         withPendingInsert: Bool,
         title: String = "wal row",
         description: String = "pending WAL"
     ) throws -> Int {
+        try releaseWalFixtureConnection()
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
 
-        var config = Configuration()
-        config.label = "AkashicWalTestPlain"
-        let queue = try DatabaseQueue(path: url.path, configuration: config)
-        try queue.write { db in
+        var setupConfig = Configuration()
+        setupConfig.label = "AkashicWalTestPlainSetup"
+        let setupQueue = try DatabaseQueue(path: url.path, configuration: setupConfig)
+        try setupQueue.write { db in
             try db.execute(sql: "PRAGMA journal_mode = WAL")
-            // Prevent autocheckpoint from truncating `-wal` before assertions / export path.
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
         }
-        try TodoDatabase.migrator.migrate(queue)
-
-        var count = 0
+        try TodoDatabase.migrator.migrate(setupQueue)
         if withPendingInsert {
-            try queue.write { db in
+            try setupQueue.write { db in
                 let ctx = try InstallationContext.loadOrCreate(in: db)
                 let todo = ctx.freshTodo(title: title, description: description, priority: .medium)
                 try todo.insert(db)
             }
-            count = 1
+        } else {
+            // Migration alone may not create a `-wal` file; force one small committed write.
+            try setupQueue.write { db in
+                _ = try InstallationContext.loadOrCreate(in: db)
+            }
         }
-        try queue.close()
+        try setupQueue.close()
+
+        // Second connection: distinctive committed row lives only in WAL until checkpoint (export path).
+        var writerConfig = Configuration()
+        writerConfig.label = "AkashicWalTestPlainWriter"
+        let writer = try DatabaseQueue(path: url.path, configuration: writerConfig)
+        try writer.write { db in
+            try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
+        }
+        if withPendingInsert {
+            try writer.write { db in
+                let ctx = try InstallationContext.loadOrCreate(in: db)
+                let todo = ctx.freshTodo(
+                    title: "WAL-only \(UUID().uuidString.prefix(8))",
+                    description: "distinctive WAL-only row",
+                    priority: .low
+                )
+                try todo.insert(db)
+            }
+        } else {
+            try writer.write { db in
+                let ctx = try InstallationContext.loadOrCreate(in: db)
+                let todo = ctx.freshTodo(
+                    title: "WAL-only-empty-fixture \(UUID().uuidString.prefix(8))",
+                    description: "distinctive WAL-only row",
+                    priority: .low
+                )
+                try todo.insert(db)
+            }
+        }
+        walFixtureWriterQueue = writer
+
         XCTAssertTrue(FileManager.default.fileExists(atPath: try walURL().path))
         XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: url))
-        return count
+        XCTAssertEqual(try countPlainTodos(), withPendingInsert ? 2 : 1)
+        return withPendingInsert ? 2 : 1
     }
 
     /// Plain DB using DELETE journal mode (no `-wal`); still validates full-row preservation on migration failure.
     private func installDeleteJournalPlaintextFixture(title: String, description: String) throws {
+        try releaseWalFixtureConnection()
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
 
@@ -166,6 +214,42 @@ final class FirstRunSetupFailureTests: XCTestCase {
             let row = try Row.fetchOne(
                 db,
                 sql: "SELECT title, description FROM todos WHERE deleted_at IS NULL ORDER BY title LIMIT 1"
+            )
+            guard let row else {
+                struct MissingRow: Error {}
+                throw MissingRow()
+            }
+            return (row["title"], row["description"])
+        }
+    }
+
+    private func plainTodoTitleAndDescription(whereTitleEquals title: String) throws -> (String, String) {
+        let url = try dbURL()
+        let q = try TodoDatabase.openPlain(at: url)
+        defer { try? q.close() }
+        return try q.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT title, description FROM todos WHERE deleted_at IS NULL AND title = ?",
+                arguments: [title]
+            )
+            guard let row else {
+                struct MissingRow: Error {}
+                throw MissingRow()
+            }
+            return (row["title"], row["description"])
+        }
+    }
+
+    private func plainTodoTitleAndDescription(whereTitleHasPrefix prefix: String) throws -> (String, String) {
+        let url = try dbURL()
+        let q = try TodoDatabase.openPlain(at: url)
+        defer { try? q.close() }
+        return try q.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT title, description FROM todos WHERE deleted_at IS NULL AND title LIKE ? ORDER BY title LIMIT 1",
+                arguments: ["\(prefix)%"]
             )
             guard let row else {
                 struct MissingRow: Error {}
@@ -236,87 +320,87 @@ final class FirstRunSetupFailureTests: XCTestCase {
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
 
-        var primary: OpaquePointer?
-        XCTAssertEqual(sqlite3_open_v2(url.path, &primary, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil), SQLITE_OK)
-        guard let dbPrimary = primary else {
-            XCTFail("sqlite3_open failed")
-            return
-        }
-        defer {
-            sqlite3_close(dbPrimary)
-        }
-
-        try sqlite3Exec(dbPrimary, "PRAGMA journal_mode = WAL")
-        try sqlite3Exec(dbPrimary, "CREATE TABLE IF NOT EXISTS busy_probe (id INTEGER PRIMARY KEY)")
-        try sqlite3Exec(dbPrimary, "INSERT INTO busy_probe (id) VALUES (1)")
-        try sqlite3Exec(dbPrimary, "BEGIN IMMEDIATE")
-
-        let checkpointDone = expectation(description: "checkpoint")
+        let lockThreadReady = DispatchSemaphore(value: 0)
+        let checkpointReturned = DispatchSemaphore(value: 0)
+        let lockThreadExited = DispatchSemaphore(value: 0)
+        let checkpointLock = NSLock()
         var checkpointError: Error?
-        DispatchQueue.global(qos: .userInitiated).async {
-            defer { checkpointDone.fulfill() }
-            Thread.sleep(forTimeInterval: 0.05)
-            var other: OpaquePointer?
-            guard sqlite3_open_v2(url.path, &other, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK,
-                  let dbOther = other
-            else {
-                checkpointError = NSError(
-                    domain: "SQLite3Test", code: -1, userInfo: [NSLocalizedDescriptionKey: "open second"]
-                )
+        var lockThreadSetupError: String?
+        let setupErrLock = NSLock()
+
+        let lockThread = Thread {
+            var primary: OpaquePointer?
+            let openRc = sqlite3_open_v2(url.path, &primary, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
+            guard openRc == SQLITE_OK, let dbPrimary = primary else {
+                setupErrLock.lock()
+                lockThreadSetupError = "sqlite3_open failed: \(openRc)"
+                setupErrLock.unlock()
+                lockThreadReady.signal()
                 return
             }
-            defer { sqlite3_close(dbOther) }
+            defer { sqlite3_close(dbPrimary) }
             do {
-                try Self.sqlite3WalTruncateCheckpointThrows(dbOther)
+                try Self.sqlite3Exec(dbPrimary, "PRAGMA journal_mode = WAL")
+                try Self.sqlite3Exec(dbPrimary, "CREATE TABLE IF NOT EXISTS busy_probe (id INTEGER PRIMARY KEY)")
+                try Self.sqlite3Exec(dbPrimary, "INSERT INTO busy_probe (id) VALUES (1)")
+                try Self.sqlite3Exec(dbPrimary, "BEGIN IMMEDIATE")
             } catch {
-                checkpointError = error
+                setupErrLock.lock()
+                lockThreadSetupError = String(describing: error)
+                setupErrLock.unlock()
+                lockThreadReady.signal()
+                return
             }
+            lockThreadReady.signal()
+            checkpointReturned.wait()
+            try? Self.sqlite3Exec(dbPrimary, "ROLLBACK")
+            lockThreadExited.signal()
+        }
+        lockThread.start()
+
+        lockThreadReady.wait()
+        setupErrLock.lock()
+        let setupErr = lockThreadSetupError
+        setupErrLock.unlock()
+        if let setupErr {
+            XCTFail(setupErr)
+            return
         }
 
-        wait(for: [checkpointDone], timeout: 5)
-        try sqlite3Exec(dbPrimary, "ROLLBACK")
+        let grdbDone = expectation(description: "grdb checkpoint")
+        DispatchQueue.global(qos: .userInitiated).async {
+            defer {
+                checkpointReturned.signal()
+                grdbDone.fulfill()
+            }
+            do {
+                let other = try DatabaseQueue(path: url.path)
+                defer { try? other.close() }
+                try other.write { db in
+                    try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
+                }
+            } catch {
+                checkpointLock.lock()
+                checkpointError = error
+                checkpointLock.unlock()
+            }
+        }
+        wait(for: [grdbDone], timeout: 5)
+        XCTAssertEqual(lockThreadExited.wait(timeout: .now() + 5), .success)
 
-        XCTAssertEqual(checkpointError as? AkashicSQLiteBundleError, .walCheckpointBusy)
+        checkpointLock.lock()
+        let err = checkpointError
+        checkpointLock.unlock()
+        XCTAssertEqual(err as? AkashicSQLiteBundleError, .walCheckpointBusy)
     }
 
-    private func sqlite3Exec(_ db: OpaquePointer?, _ sql: String) throws {
+    private nonisolated static func sqlite3Exec(_ db: OpaquePointer?, _ sql: String) throws {
         var errMsg: UnsafeMutablePointer<Int8>?
         let rc = sqlite3_exec(db, sql, nil, nil, &errMsg)
         guard rc == SQLITE_OK else {
             let message = errMsg.map { String(cString: $0) } ?? "sqlite3_exec failed (\(rc))"
             sqlite3_free(errMsg)
             throw NSError(domain: "SQLite3Test", code: Int(rc), userInfo: [NSLocalizedDescriptionKey: message])
-        }
-    }
-
-    /// Mirrors `SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL` using sqlite3 only (no nested GRDB transactions).
-    private static func sqlite3WalTruncateCheckpointThrows(_ db: OpaquePointer?) throws {
-        var modeStmt: OpaquePointer?
-        defer { sqlite3_finalize(modeStmt) }
-        guard sqlite3_prepare_v2(db, "PRAGMA journal_mode", -1, &modeStmt, nil) == SQLITE_OK else {
-            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "prepare journal_mode")
-        }
-        guard sqlite3_step(modeStmt) == SQLITE_ROW else {
-            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "journal_mode step")
-        }
-        let mode = String(cString: sqlite3_column_text(modeStmt, 0)).lowercased()
-        guard mode == "wal" else { return }
-
-        var ckptStmt: OpaquePointer?
-        defer { sqlite3_finalize(ckptStmt) }
-        guard sqlite3_prepare_v2(db, "PRAGMA wal_checkpoint(TRUNCATE)", -1, &ckptStmt, nil) == SQLITE_OK else {
-            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "prepare wal_checkpoint")
-        }
-        guard sqlite3_step(ckptStmt) == SQLITE_ROW else {
-            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "wal_checkpoint step")
-        }
-        let busy = sqlite3_column_int64(ckptStmt, 0)
-        let logPages = sqlite3_column_int64(ckptStmt, 1)
-        if busy != 0 {
-            throw AkashicSQLiteBundleError.walCheckpointBusy
-        }
-        if logPages != 0 {
-            throw AkashicSQLiteBundleError.walCheckpointIncomplete(remainingLogPages: logPages)
         }
     }
 
@@ -363,11 +447,16 @@ final class FirstRunSetupFailureTests: XCTestCase {
             title: uniqueTitle,
             description: uniqueBody
         )
-        XCTAssertEqual(try countPlainTodos(), 1)
-        let (savedTitle, savedBody) = try firstPlainActiveTodoTitleAndDescription()
+        XCTAssertEqual(try countPlainTodos(), 2)
+        let (savedTitle, savedBody) = try plainTodoTitleAndDescription(whereTitleEquals: uniqueTitle)
         XCTAssertEqual(savedTitle, uniqueTitle)
         XCTAssertEqual(savedBody, uniqueBody)
+        let (walOnlyTitle, walOnlyDesc) = try plainTodoTitleAndDescription(whereTitleHasPrefix: "WAL-only ")
+        XCTAssertTrue(walOnlyTitle.hasPrefix("WAL-only "))
+        XCTAssertEqual(walOnlyDesc, "distinctive WAL-only row")
         XCTAssertTrue(FileManager.default.fileExists(atPath: try walURL().path))
+
+        try releaseWalFixtureConnection()
 
         let vault = makeVault()
         await startVaultForFirstRun(vault)
@@ -388,10 +477,13 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertEqual(vault.setupOtpauthURI, otpauth)
         XCTAssertTrue(vault.testingIsAPILocked)
 
-        XCTAssertEqual(try countPlainTodos(), 1)
-        let (afterTitle, afterBody) = try firstPlainActiveTodoTitleAndDescription()
+        XCTAssertEqual(try countPlainTodos(), 2)
+        let (afterTitle, afterBody) = try plainTodoTitleAndDescription(whereTitleEquals: uniqueTitle)
         XCTAssertEqual(afterTitle, uniqueTitle)
         XCTAssertEqual(afterBody, uniqueBody)
+        let (afterWalTitle, afterWalDesc) = try plainTodoTitleAndDescription(whereTitleHasPrefix: "WAL-only ")
+        XCTAssertTrue(afterWalTitle.hasPrefix("WAL-only "))
+        XCTAssertEqual(afterWalDesc, "distinctive WAL-only row")
         XCTAssertTrue(FileManager.default.fileExists(atPath: try walURL().path))
         XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: try dbURL()))
         XCTAssertFalse(FileManager.default.fileExists(atPath: try securityURL().path))
@@ -494,6 +586,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
 
     func testRollbackFailureSurfacesManualRecoveryAndBlocksWizard() async throws {
         _ = try installWALPlaintextDatabaseFixture(withPendingInsert: false)
+        try releaseWalFixtureConnection()
 
         let vault = makeVault()
         await startVaultForFirstRun(vault)
@@ -628,6 +721,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
 
     /// Seed `akashic.sqlite` with a plain (non-SQLCipher) database file.
     private func installPlaintextDatabaseFixture(seedTodoTitle: String? = nil) throws {
+        try releaseWalFixtureConnection()
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
         let q = try TodoDatabase.openPlain(at: url)
