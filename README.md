@@ -11,6 +11,15 @@ Native macOS menu-bar todo app (SwiftUI + SQLite). Accessory app with no Dock ic
 
 Shared logic (models, database, sync bookkeeping, merge helpers) lives in the **`AkashicCore`** library target (macOS 15 + iOS 17); the `Akashic` executable is the menu-bar app.
 
+## Isolated data directory (DoD / dry-run)
+
+Set `AKASHIC_DATA_DIR` to an absolute path so the app stores `akashic.sqlite` and `akashic-security.json` there instead of `~/Library/Application Support/Akashic`. Leave unset for normal use.
+
+```bash
+mkdir -p /tmp/akashic-dod-vault
+AKASHIC_DATA_DIR=/tmp/akashic-dod-vault open ./build/Akashic.app
+```
+
 ## Build and run
 
 From this directory:

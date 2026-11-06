@@ -64,9 +64,9 @@ final class Phase3SecurityTests: XCTestCase {
         let encURL = dir.appendingPathComponent("enc.sqlite")
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        let plainQueue = try DatabaseQueue(path: plainURL.path)
-        try TodoDatabase.migrator.migrate(plainQueue)
-        try plainQueue.write { db in
+        var plainQueue: DatabaseQueue? = try DatabaseQueue(path: plainURL.path)
+        try TodoDatabase.migrator.migrate(plainQueue!)
+        try plainQueue!.write { db in
             try db.execute(
                 sql: """
                 INSERT INTO todos (id, title, description, completed, priority, created_on, updated_at, sort_order)
@@ -75,7 +75,9 @@ final class Phase3SecurityTests: XCTestCase {
                 arguments: [UUID().uuidString, "t", "", 0, "medium", Date(), Date(), 0]
             )
         }
-        let before = try plainQueue.read { try AkashicPlaintextMigration.countRows(in: $0) }
+        let before = try plainQueue!.read { try AkashicPlaintextMigration.countRows(in: $0) }
+        // Release the writer before export so ATTACH/DETACH is not blocked.
+        plainQueue = nil
 
         let dataKey = try DataKeyManager.randomDataKey()
         try AkashicPlaintextMigration.exportPlaintextToEncrypted(

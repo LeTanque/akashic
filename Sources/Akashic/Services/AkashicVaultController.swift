@@ -39,6 +39,7 @@ final class AkashicVaultController: ObservableObject {
     @Published var unlockUsername = ""
     @Published var unlockPassword = ""
     @Published var unlockTOTP = ""
+    @Published var unlockRecoveryCode = ""
     @Published var unlockError: String?
 
     @Published var biometricUnlockEnabled: Bool {
@@ -57,7 +58,8 @@ final class AkashicVaultController: ObservableObject {
 
     private let apiService: AkashicAPIService
     private var idleMonitor: IdleTimeLockMonitor?
-    private var sleepObservers: [NSObjectProtocol] = []
+    /// Cleared in `deinit`; `nonisolated(unsafe)` so teardown can run off MainActor.
+    nonisolated(unsafe) private var sleepObservers: [NSObjectProtocol] = []
 
     private static let biometricKey = "akashic.security.biometricUnlock"
     private static let autoLockKey = "akashic.security.autoLockIdleMinutes"
@@ -232,6 +234,27 @@ final class AkashicVaultController: ObservableObject {
         }
     }
 
+    /// Recovery code replaces the password; TOTP is still required (secret sealed under data key).
+    func unlockWithRecovery() async {
+        unlockError = nil
+        guard let metadata = try? LocalSecurityMetadataStore.load() else {
+            unlockError = "Missing security metadata."
+            return
+        }
+        do {
+            let dataKey = try DataKeyManager.unwrapDataKey(metadata: metadata, recoveryCode: unlockRecoveryCode)
+            let totpSecret = try DataKeyManager.openTOTPSecret(metadata: metadata, dataKey: dataKey)
+            guard TOTP.validate(secret: totpSecret, code: unlockTOTP) else {
+                unlockError = "Invalid authenticator code."
+                return
+            }
+            try finishUnlock(dataKey: dataKey, metadata: metadata)
+            unlockRecoveryCode = ""
+        } catch {
+            unlockError = "Recovery unlock failed."
+        }
+    }
+
     func unlockWithBiometrics() async {
         unlockError = nil
         guard biometricUnlockEnabled else { return }
@@ -261,6 +284,7 @@ final class AkashicVaultController: ObservableObject {
         presentation = .unlock
         unlockPassword = ""
         unlockTOTP = ""
+        unlockRecoveryCode = ""
         unlockError = nil
         apiService.setLocked(true)
         idleMonitor?.stop()
@@ -332,18 +356,14 @@ final class AkashicVaultController: ObservableObject {
                 object: nil,
                 queue: .main
             ) { _ in
-                MainActor.assumeIsolated {
-                    NotificationCenter.default.post(name: .akashicRequestLock, object: nil)
-                }
+                NotificationCenter.default.post(name: .akashicRequestLock, object: nil)
             },
             NSWorkspace.shared.notificationCenter.addObserver(
                 forName: NSWorkspace.willSleepNotification,
                 object: nil,
                 queue: .main
             ) { _ in
-                MainActor.assumeIsolated {
-                    NotificationCenter.default.post(name: .akashicRequestLock, object: nil)
-                }
+                NotificationCenter.default.post(name: .akashicRequestLock, object: nil)
             },
         ]
     }

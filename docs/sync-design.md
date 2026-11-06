@@ -72,6 +72,10 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 3. **Row counts** are compared for `todos`, `notes`, `tags`, `note_tags`, `app_meta`, `change_log` (missing tables count as 0).
 4. On success: **atomic replace** — plaintext moved to `akashic.sqlite.plaintext-backup-<ISO8601>` (with `:` → `-` in the timestamp), encrypted temp moved to `akashic.sqlite`. On **any failure**, the original plaintext file is left in place; the app does not delete the backup automatically (user removes it after verifying).
 
+### Data directory override
+
+- Environment variable **`AKASHIC_DATA_DIR`**: absolute path used as the vault folder (DB + `akashic-security.json`) instead of Application Support / `Akashic`. For dry-runs and DoD only; unset in production.
+
 ### App lock vs local API
 
 - App starts **locked** (cyberpunk-themed unlock window); menu-bar icon remains.

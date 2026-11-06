@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 struct AkashicUnlockView: View {
     @ObservedObject var vault: AkashicVaultController
+    @State private var useRecovery = false
 
     var body: some View {
         VStack(spacing: 18) {
@@ -14,9 +16,17 @@ struct AkashicUnlockView: View {
                 .foregroundStyle(CyberpunkTheme.readableMutedCyan)
 
             VStack(alignment: .leading, spacing: 12) {
-                unlockField(title: "PASSWORD", secure: true, text: $vault.unlockPassword, contentType: .password)
+                if useRecovery {
+                    unlockField(title: "RECOVERY CODE", secure: false, text: $vault.unlockRecoveryCode, contentType: NSTextContentType?.none)
+                } else {
+                    unlockField(title: "PASSWORD", secure: true, text: $vault.unlockPassword, contentType: .password)
+                }
                 unlockField(title: "6-DIGIT CODE", secure: false, text: $vault.unlockTOTP, contentType: .oneTimeCode)
             }
+
+            Toggle("Use recovery code instead of password", isOn: $useRecovery)
+                .toggleStyle(.switch)
+                .foregroundStyle(CyberpunkTheme.readableMutedCyan)
 
             Toggle("Use Touch ID after unlock (this device)", isOn: Binding(
                 get: { vault.biometricUnlockEnabled },
@@ -28,9 +38,15 @@ struct AkashicUnlockView: View {
 
             HStack(spacing: 12) {
                 unlockButton("UNLOCK") {
-                    Task { await vault.unlock() }
+                    Task {
+                        if useRecovery {
+                            await vault.unlockWithRecovery()
+                        } else {
+                            await vault.unlock()
+                        }
+                    }
                 }
-                if vault.biometricUnlockEnabled {
+                if vault.biometricUnlockEnabled && !useRecovery {
                     unlockButton("TOUCH ID") {
                         Task { await vault.unlockWithBiometrics() }
                     }
@@ -45,14 +61,14 @@ struct AkashicUnlockView: View {
             }
         }
         .padding(32)
-        .frame(minWidth: 400, minHeight: 360)
+        .frame(minWidth: 400, minHeight: 400)
     }
 
     private func unlockField(
         title: String,
         secure: Bool,
         text: Binding<String>,
-        contentType: TextContentType?
+        contentType: NSTextContentType?
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
@@ -91,7 +107,7 @@ struct AkashicUnlockView: View {
 
 private extension View {
     @ViewBuilder
-    func applyContentType(_ type: TextContentType?) -> some View {
+    func applyContentType(_ type: NSTextContentType?) -> some View {
         if let type {
             self.textContentType(type)
         } else {

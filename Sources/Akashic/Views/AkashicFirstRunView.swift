@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct AkashicFirstRunView: View {
@@ -86,7 +87,7 @@ struct AkashicFirstRunView: View {
 private struct CyberField: View {
     let title: String
     @Binding var text: String
-    var contentType: TextContentType?
+    var contentType: NSTextContentType?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -100,7 +101,7 @@ private struct CyberField: View {
                 .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.5), lineWidth: 1))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
                 .font(.system(.body, design: .monospaced))
-                .applyTextContentType(contentType)
+                .applyNSTextContentType(contentType)
         }
     }
 }
@@ -108,7 +109,7 @@ private struct CyberField: View {
 private struct CyberSecureField: View {
     let title: String
     @Binding var text: String
-    var contentType: TextContentType?
+    var contentType: NSTextContentType?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -122,7 +123,7 @@ private struct CyberSecureField: View {
                 .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.5), lineWidth: 1))
                 .foregroundStyle(CyberpunkTheme.neonCyan)
                 .font(.system(.body, design: .monospaced))
-                .applyTextContentType(contentType)
+                .applyNSTextContentType(contentType)
         }
     }
 }
@@ -147,7 +148,7 @@ private struct CyberButton: View {
 
 private extension View {
     @ViewBuilder
-    func applyTextContentType(_ type: TextContentType?) -> some View {
+    func applyNSTextContentType(_ type: NSTextContentType?) -> some View {
         if let type {
             self.textContentType(type)
         } else {

@@ -66,30 +66,49 @@ public enum AkashicPlaintextMigration {
         encryptedDestinationURL: URL,
         dataKey: Data
     ) throws {
+        guard !dataKey.isEmpty else { throw AkashicCryptoError.invalidInput }
+
         let plainConfig = Configuration()
         let plainQueue = try DatabaseQueue(path: plaintextURL.path, configuration: plainConfig)
-
-        var encConfig = TodoDatabase.encryptedConfiguration(passphrase: dataKey)
-        _ = FileManager.default.createFile(atPath: encryptedDestinationURL.path, contents: nil)
-        let encQueue = try DatabaseQueue(path: encryptedDestinationURL.path, configuration: encConfig)
-
         let before = try plainQueue.read { try countRows(in: $0) }
+        // Drop our reader so ATTACH below is the only connection on the plaintext file.
+        // (Callers must also release any other open queues on `plaintextURL`.)
+        try plainQueue.close()
 
-        try plainQueue.write { db in
-            try db.execute(
-                sql: "ATTACH DATABASE ? AS encrypted KEY ?",
-                arguments: [encryptedDestinationURL.path, dataKey]
-            )
-            try db.execute(sql: "SELECT sqlcipher_export('encrypted')")
-            try db.execute(sql: "DETACH DATABASE encrypted")
+        if FileManager.default.fileExists(atPath: encryptedDestinationURL.path) {
+            try FileManager.default.removeItem(at: encryptedDestinationURL)
         }
 
-        let after = try encQueue.read { try countRows(in: $0) }
+        // Open the destination under SQLCipher first, then pull plaintext in via
+        // sqlcipher_export(main, plaintext). Detaching the *source* avoids the
+        // "database encrypted is locked" failure seen when detaching the export target.
+        let encQueue = try DatabaseQueue(
+            path: encryptedDestinationURL.path,
+            configuration: TodoDatabase.encryptedConfiguration(passphrase: dataKey)
+        )
+        try encQueue.write { db in
+            try db.execute(
+                sql: "ATTACH DATABASE ? AS plaintext KEY ''",
+                arguments: [plaintextURL.path]
+            )
+            // finalize via execute (not a lingering cursor)
+            try db.execute(sql: "SELECT sqlcipher_export('main', 'plaintext')")
+            // DETACH after sqlcipher_export often fails with "database is locked" under
+            // GRDB's serialized connection; closing the queue releases the attach instead.
+        }
+        try encQueue.close()
+
+        let encQueue2 = try DatabaseQueue(
+            path: encryptedDestinationURL.path,
+            configuration: TodoDatabase.encryptedConfiguration(passphrase: dataKey)
+        )
+        let after = try encQueue2.read { try countRows(in: $0) }
         guard before == after else {
+            try? FileManager.default.removeItem(at: encryptedDestinationURL)
             throw AkashicMigrationError.rowCountMismatch(expected: before, actual: after)
         }
         // Apply any pending GRDB migrations on the encrypted copy (usually no-op if source was current).
-        try TodoDatabase.migrator.migrate(encQueue)
+        try TodoDatabase.migrator.migrate(encQueue2)
     }
 
     /// Backs up plaintext, replaces live DB with encrypted file atomically. Plaintext becomes `akashic.sqlite.plaintext-backup-<timestamp>`.

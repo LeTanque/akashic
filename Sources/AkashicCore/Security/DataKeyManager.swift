@@ -40,11 +40,11 @@ public enum DataKeyManager {
         dataKey: Data? = nil,
         recoveryCodeDisplay: String? = nil
     ) throws -> (metadata: LocalSecurityMetadata, recoveryDisplay: String, totpSecretBase32: String, otpauthURI: String) {
-        let dataKey = dataKey ?? (try randomDataKey())
+        let dataKey = try dataKey ?? randomDataKey()
         let passwordSalt = try randomBytes(count: 16)
         let passwordWrapped = try wrapDataKey(dataKey, password: passwordData(from: password), salt: passwordSalt)
 
-        let recoveryDisplay = recoveryCodeDisplay ?? (try randomRecoveryCode())
+        let recoveryDisplay = try recoveryCodeDisplay ?? randomRecoveryCode()
         let recoveryNormalized = normalizeRecoveryCode(recoveryDisplay)
         guard recoveryNormalized.count == 30 else { throw AkashicCryptoError.invalidInput }
 

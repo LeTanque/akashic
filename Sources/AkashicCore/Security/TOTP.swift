@@ -33,9 +33,21 @@ public enum TOTP {
             let ctr = Int64(base) + Int64(delta)
             guard ctr >= 0 else { continue }
             let expected = hotp(secret: secret, counter: UInt64(ctr), digits: digits)
-            if expected == normalized { return true }
+            if constantTimeEqual(expected, normalized) { return true }
         }
         return false
+    }
+
+    /// Constant-time string equality for equal-length digit codes (mitigates timing leaks).
+    private static func constantTimeEqual(_ a: String, _ b: String) -> Bool {
+        let ab = Array(a.utf8)
+        let bb = Array(b.utf8)
+        guard ab.count == bb.count else { return false }
+        var diff: UInt8 = 0
+        for i in 0 ..< ab.count {
+            diff |= ab[i] ^ bb[i]
+        }
+        return diff == 0
     }
 
     private static func hotp(secret: Data, counter: UInt64, digits: Int) -> String {

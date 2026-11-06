@@ -6,20 +6,37 @@ import Foundation
 final class AkashicAPIService: ObservableObject {
     @Published private(set) var isLocked: Bool = true
 
-    private let apiLock = NSLock()
-    private var apiLockedFlag: Bool = true
+    /// Lock flag readable from the HTTP thread without hopping to MainActor.
+    private let apiLockFlag = LockedBool(initial: true)
 
     /// Thread-safe read for the HTTP handler (off MainActor).
     nonisolated func isLockedForAPI() -> Bool {
-        apiLock.lock()
-        defer { apiLock.unlock() }
-        return apiLockedFlag
+        apiLockFlag.value
     }
 
     func setLocked(_ locked: Bool) {
         isLocked = locked
-        apiLock.lock()
-        apiLockedFlag = locked
-        apiLock.unlock()
+        apiLockFlag.value = locked
+    }
+}
+
+/// Tiny lock-guarded Bool; `@unchecked Sendable` justified by `NSLock`.
+private final class LockedBool: @unchecked Sendable {
+    private let lock = NSLock()
+    private var raw: Bool
+
+    init(initial: Bool) { raw = initial }
+
+    var value: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return raw
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            raw = newValue
+        }
     }
 }
