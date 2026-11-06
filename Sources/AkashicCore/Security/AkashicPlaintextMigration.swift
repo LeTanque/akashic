@@ -66,6 +66,9 @@ public enum AkashicPlaintextMigration {
         encryptedDestinationURL: URL,
         dataKey: Data
     ) throws {
+        if let err = AkashicPlaintextMigrationTestingHooks.exportPlaintextFailure {
+            throw err
+        }
         guard !dataKey.isEmpty else { throw AkashicCryptoError.invalidInput }
 
         let plainConfig = Configuration()
@@ -109,6 +112,7 @@ public enum AkashicPlaintextMigration {
         }
         // Apply any pending GRDB migrations on the encrypted copy (usually no-op if source was current).
         try TodoDatabase.migrator.migrate(encQueue2)
+        try encQueue2.close()
     }
 
     /// Backs up plaintext, replaces live DB with encrypted file atomically. Plaintext becomes `akashic.sqlite.plaintext-backup-<timestamp>`.
@@ -116,7 +120,10 @@ public enum AkashicPlaintextMigration {
         livePlaintextURL: URL,
         encryptedTempURL: URL,
         backupDirectory: URL
-    ) throws {
+    ) throws -> URL {
+        if let err = AkashicPlaintextMigrationTestingHooks.atomicSwapError {
+            throw err
+        }
         let ts = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
         let backupName = "akashic.sqlite.plaintext-backup-\(ts)"
         let backupURL = backupDirectory.appendingPathComponent(backupName)
@@ -134,6 +141,7 @@ public enum AkashicPlaintextMigration {
             try? FileManager.default.moveItem(at: backupURL, to: livePlaintextURL)
             throw error
         }
+        return backupURL
     }
 }
 

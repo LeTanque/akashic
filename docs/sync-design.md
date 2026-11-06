@@ -54,7 +54,7 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 
 - **RFC 6238**, HMAC-SHA1, **30 s** step, **6 digits**, standard `otpauth://totp/...` URI with QR during setup.
 - **Base32:** 20-byte secrets encode to **exactly 32** Base32 characters (160 bits ÷ 5 bits/symbol); the `secret=` query value is unpadded RFC 4648 Base32 (no `=` in the URI; some clients add padding when importing — our decoder strips `=`).
-- **Earlier defects (fixed):** Base32 used **`Int` shifts that overflowed** once more than ~8 bits accumulated (e.g. **19-byte** recovery material), and the encoder also **failed to mask consumed bits** after emitting each quintet—so even short strings like the RFC **`foobar`** vector could not round-trip. Recovery codes and any secret that shared that encoder were at risk; **TOTP** used a fresh 20-byte secret each setup, but QR/URI paths still depended on correct Base32.
+- **Encoder:** The implementation was switched to a **`UInt64` buffer with explicit masking** after each quintet for robustness. Separate verification (including RFC **`foobar`**, **19- / 20-byte** secrets, and random 20-byte cases) matches reference Base32 output; treat the change as hardening rather than a confirmed production defect in the prior version.
 - **Code entry:** Only ASCII `0`–`9` count toward the code; formatting **whitespace** (incl. narrow/no-break spaces) is stripped. Other characters (letters, full-width digits) are rejected.
 - The secret is generated once at setup and stored in the sidecar **encrypted with the data key**, in a `LocalSecurityMetadata` shape a future server can mirror for enrollment.
 - Validation accepts clock skew **±1** period (~60 s window).
@@ -76,6 +76,8 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 3. **Row counts** are compared for `todos`, `notes`, `tags`, `note_tags`, `app_meta`, `change_log` (missing tables count as 0).
 4. On success: **atomic replace** — plaintext moved to `akashic.sqlite.plaintext-backup-<ISO8601>` (with `:` → `-` in the timestamp), encrypted temp moved to `akashic.sqlite`. On **any failure**, the original plaintext file is left in place; the app does not delete the backup automatically (user removes it after verifying).
 5. Migration or filesystem failures after TOTP verification are reported with an explicit **encryption / database** error — not as a wrong OTP (which only runs when six digits do not match the sealed secret).
+
+6. **First-run finish order:** after a valid TOTP, the app prepares the **encrypted database** (migrate in place or create empty), then writes **`akashic-security.json`**, then opens the DB and transitions to **ready**. If saving the sidecar or opening the DB fails, it rolls back disk state (including removing a just-written sidecar and restoring plaintext from backup when a migration was in progress) so setup stays **incomplete** with the **same pending secrets** for retry.
 
 ### Data directory override
 

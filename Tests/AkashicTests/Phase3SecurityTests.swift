@@ -141,7 +141,7 @@ final class Phase3SecurityTests: XCTestCase {
         XCTAssertEqual(try AkashicBase32.decode(enc), raw)
     }
 
-    /// 152 bits → 31 Base32 symbols; prior `Int`-buffer encoder silently broke longer inputs.
+    /// 152 bits → 31 Base32 symbols (recovery display trims 30 of these).
     func testBase32NineteenByteZerosRoundTrip() throws {
         let raw = Data(repeating: 0, count: 19)
         let enc = AkashicBase32.encode(raw)

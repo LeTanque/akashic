@@ -1,6 +1,12 @@
 import Foundation
 import GRDB
 
+/// Test-only hooks (package tests). Must remain `nil` / `false` in production paths.
+public enum TodoDatabaseTestingHooks {
+    public nonisolated(unsafe) static var createEncryptedEmptyFailure: Error?
+    public nonisolated(unsafe) static var openEncryptedFailure: Error?
+}
+
 public enum TodoDatabase {
     /// Apply bundled schema migrations (used after `sqlcipher_export` and in tests).
     public static var migrator: DatabaseMigrator {
@@ -23,6 +29,9 @@ public enum TodoDatabase {
 
     /// Opens the on-disk database with the SQLCipher data key, migrates, returns a queue.
     public static func openEncrypted(at url: URL, passphrase: Data) throws -> DatabaseQueue {
+        if let err = TodoDatabaseTestingHooks.openEncryptedFailure {
+            throw err
+        }
         var config = encryptedConfiguration(passphrase: passphrase)
         let queue = try DatabaseQueue(path: url.path, configuration: config)
         try migrator.migrate(queue)
@@ -38,6 +47,9 @@ public enum TodoDatabase {
 
     /// Creates a new empty encrypted database file (overwrites if caller removed existing temp).
     public static func createEncryptedEmpty(at url: URL, passphrase: Data) throws -> DatabaseQueue {
+        if let err = TodoDatabaseTestingHooks.createEncryptedEmptyFailure {
+            throw err
+        }
         let queue = try DatabaseQueue(path: url.path, configuration: encryptedConfiguration(passphrase: passphrase))
         try migrator.migrate(queue)
         return queue

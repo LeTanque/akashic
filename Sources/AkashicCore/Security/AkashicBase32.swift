@@ -2,9 +2,9 @@ import Foundation
 
 /// RFC 4648 Base32 (alphabet A–Z2–7), no `=` padding in encoded output.
 ///
-/// An earlier `Int`-based accumulator **overflowed** on left shifts for long inputs (e.g. 19-byte
-/// recovery material), producing short/incorrect strings and breaking round-trips. This
-/// implementation keeps a `UInt64` buffer and masks unused bits after each output quintet.
+/// Uses a `UInt64` bit buffer with masking after each emitted quintet so long inputs and decode
+/// stays well-defined. Independent checks show encoder output matches reference Base32 for standard
+/// vectors (including 19- and 20-byte secrets); the `UInt64` path is defensive hardening.
 public enum AkashicBase32 {
     private static let alphabet: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
 

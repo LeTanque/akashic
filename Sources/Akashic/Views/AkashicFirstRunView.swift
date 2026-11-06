@@ -72,14 +72,17 @@ struct AkashicFirstRunView: View {
                 .font(.caption)
                 .foregroundStyle(CyberpunkTheme.readableMutedCyan)
             CyberField(title: "6-DIGIT CODE", text: $vault.setupTOTPCode, contentType: .oneTimeCode)
-            CyberButton(title: "FINISH SETUP") {
-                Task { await vault.completeFirstRunAfterTOTP() }
-            }
+            CyberButton(
+                title: vault.isCompletingFirstRun ? "FINISHING…" : "FINISH SETUP",
+                action: { Task { await vault.completeFirstRunAfterTOTP() } },
+                isEnabled: !vault.isCompletingFirstRun
+            )
             Button("Back") {
                 vault.goBackFromFirstRunConfirmToCodes()
             }
             .buttonStyle(.plain)
             .foregroundStyle(CyberpunkTheme.readableMutedCyan)
+            .disabled(vault.isCompletingFirstRun)
         }
     }
 }
@@ -131,18 +134,25 @@ private struct CyberSecureField: View {
 private struct CyberButton: View {
     let title: String
     let action: () -> Void
+    var isEnabled: Bool = true
 
     var body: some View {
         Button(action: action) {
             Text(title)
                 .font(.custom("Menlo-Bold", size: 11))
-                .foregroundStyle(CyberpunkTheme.neonCyan)
+                .foregroundStyle(isEnabled ? CyberpunkTheme.neonCyan : CyberpunkTheme.readableMutedCyan.opacity(0.45))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.4))
-                .overlay(Rectangle().stroke(CyberpunkTheme.neonCyan.opacity(0.85), lineWidth: 1))
+                .overlay(
+                    Rectangle().stroke(
+                        (isEnabled ? CyberpunkTheme.neonCyan : CyberpunkTheme.readableMutedCyan).opacity(isEnabled ? 0.85 : 0.35),
+                        lineWidth: 1
+                    )
+                )
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
     }
 }
 
