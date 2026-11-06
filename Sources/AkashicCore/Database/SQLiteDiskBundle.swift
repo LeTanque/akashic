@@ -41,23 +41,37 @@ public enum SQLiteDiskBundle {
 
     /// For **WAL** databases: run `PRAGMA wal_checkpoint(TRUNCATE)` and require `busy=0` and `log=0`.
     /// For **DELETE/TRUNCATE/OFF** journals SQLite returns `(0,-1,-1)` — that is valid; we no-op.
+    ///
+    /// **Important:** `wal_checkpoint(TRUNCATE)` must **not** run inside an implicit writer transaction.
+    /// Use ``DatabaseQueue/writeWithoutTransaction`` / ``DatabasePool/writeWithoutTransaction`` at call sites.
     public static func requireTruncatingWalCheckpointIfWAL(_ db: Database) throws {
         guard let mode = try String.fetchOne(db, sql: "PRAGMA journal_mode") else {
             throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "PRAGMA journal_mode returned no row")
         }
         guard mode.lowercased() == "wal" else { return }
 
-        guard let row = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") else {
-            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "PRAGMA wal_checkpoint returned no row")
-        }
-        // Column names: busy, log, checkpointed (SQLite 3)
-        let busy: Int64 = row["busy"]
-        let logPages: Int64 = row["log"]
-        if busy != 0 {
-            throw AkashicSQLiteBundleError.walCheckpointBusy
-        }
-        if logPages != 0 {
-            throw AkashicSQLiteBundleError.walCheckpointIncomplete(remainingLogPages: logPages)
+        do {
+            guard let row = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") else {
+                throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "PRAGMA wal_checkpoint returned no row")
+            }
+            // Column names: busy, log, checkpointed (SQLite 3)
+            let busy: Int64 = row["busy"]
+            let logPages: Int64 = row["log"]
+            if busy != 0 {
+                throw AkashicSQLiteBundleError.walCheckpointBusy
+            }
+            if logPages != 0 {
+                throw AkashicSQLiteBundleError.walCheckpointIncomplete(remainingLogPages: logPages)
+            }
+        } catch let error as DatabaseError {
+            // When run inside a transaction (programmer error) or under contention, SQLite may raise
+            // SQLITE_BUSY / SQLITE_LOCKED instead of returning busy=1 from the pragma row.
+            let primary = error.resultCode.rawValue & 0xFF
+            // SQLITE_BUSY = 5, SQLITE_LOCKED = 6
+            if primary == 5 || primary == 6 {
+                throw AkashicSQLiteBundleError.walCheckpointBusy
+            }
+            throw error
         }
     }
 
@@ -118,7 +132,7 @@ public enum SQLiteDiskBundle {
         var config = Configuration()
         config.label = "AkashicCheckpointPlain"
         let queue = try DatabaseQueue(path: main.path, configuration: config)
-        try queue.write { db in
+        try queue.writeWithoutTransaction { db in
             try requireTruncatingWalCheckpointIfWAL(db)
         }
         try queue.close()

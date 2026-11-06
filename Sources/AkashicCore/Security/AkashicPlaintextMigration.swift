@@ -75,7 +75,7 @@ public enum AkashicPlaintextMigration {
         let plainQueue = try DatabaseQueue(path: plaintextURL.path, configuration: plainConfig)
         let before = try plainQueue.read { try countRows(in: $0) }
         // Merge WAL into the main file; abort if another writer leaves WAL busy or non-empty.
-        try plainQueue.write { db in
+        try plainQueue.writeWithoutTransaction { db in
             try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
         }
         // Drop our reader so ATTACH below is the only connection on the plaintext file.
@@ -116,7 +116,7 @@ public enum AkashicPlaintextMigration {
         }
         // Apply any pending GRDB migrations on the encrypted copy (usually no-op if source was current).
         try TodoDatabase.migrator.migrate(encQueue2)
-        try encQueue2.write { db in
+        try encQueue2.writeWithoutTransaction { db in
             try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
         }
         try encQueue2.close()

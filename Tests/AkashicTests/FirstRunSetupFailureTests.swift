@@ -109,18 +109,19 @@ final class FirstRunSetupFailureTests: XCTestCase {
         return URL(fileURLWithPath: u.path + "-wal", isDirectory: false)
     }
 
-    /// Diagnostics for failures (journal mode + raw `wal_checkpoint` triple); does not mutate DB.
+    /// Diagnostics: `journal_mode` via read; raw **`PRAGMA wal_checkpoint(TRUNCATE)`** triple outside a write txn.
     private func walCheckpointDiagnostics(queue: DatabaseQueue, label: String) throws -> String {
-        try queue.read { db in
-            let jm = try String.fetchOne(db, sql: "PRAGMA journal_mode") ?? "?"
+        let jm = try queue.read { db in try String.fetchOne(db, sql: "PRAGMA journal_mode") ?? "?" }
+        let triple = try queue.writeWithoutTransaction { db -> String in
             if let row = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") {
                 let busy: Int64 = row["busy"]
                 let log: Int64 = row["log"]
                 let checkpointed: Int64 = row["checkpointed"]
-                return "\(label): journal_mode=\(jm) wal_checkpoint busy=\(busy) log=\(log) checkpointed=\(checkpointed)"
+                return "wal_checkpoint busy=\(busy) log=\(log) checkpointed=\(checkpointed)"
             }
-            return "\(label): journal_mode=\(jm) wal_checkpoint returned no row"
+            return "wal_checkpoint returned no row"
         }
+        return "\(label): journal_mode=\(jm) \(triple)"
     }
 
     /// Plain DB with WAL journal. Leaves **`walFixtureWriterQueue`** open with a committed writer so `-wal`
@@ -138,7 +139,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         var setupConfig = Configuration()
         setupConfig.label = "AkashicWalTestPlainSetup"
         let setupQueue = try DatabaseQueue(path: url.path, configuration: setupConfig)
-        try setupQueue.write { db in
+        try setupQueue.writeWithoutTransaction { db in
             try db.execute(sql: "PRAGMA journal_mode = WAL")
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
         }
@@ -161,7 +162,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         var writerConfig = Configuration()
         writerConfig.label = "AkashicWalTestPlainWriter"
         let writer = try DatabaseQueue(path: url.path, configuration: writerConfig)
-        try writer.write { db in
+        try writer.writeWithoutTransaction { db in
             // New pools can still use DELETE until explicitly switched to WAL.
             try db.execute(sql: "PRAGMA journal_mode = WAL")
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
@@ -420,35 +421,49 @@ final class FirstRunSetupFailureTests: XCTestCase {
 
         var checkpointError: Error?
         let grdb = try DatabaseQueue(path: url.path)
-        defer {
-            try? grdb.close()
-            checkpointDone.signal()
-        }
         let diagBefore = try walCheckpointDiagnostics(queue: grdb, label: "busy-test-grdb")
+        try grdb.writeWithoutTransaction { db in
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+            try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
+            // So a contended checkpoint blocks up to 30s (then returns busy / SQLITE_BUSY) instead of failing instantly.
+            try db.execute(sql: "PRAGMA busy_timeout = 30000")
+        }
+        try grdb.write { db in
+            try db.execute(sql: "INSERT INTO wal_checkpoint_busy_probe (id) VALUES (2)")
+        }
         do {
-            try grdb.write { db in
-                try db.execute(sql: "PRAGMA journal_mode = WAL")
-                try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
-                try db.execute(sql: "INSERT INTO wal_checkpoint_busy_probe (id) VALUES (2)")
-            }
-            try grdb.write { db in
+            try grdb.writeWithoutTransaction { db in
                 try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
             }
             checkpointError = nil
         } catch {
             checkpointError = error
         }
+        // Unblock reader as soon as the checkpoint attempt returns (success or failure).
+        checkpointDone.signal()
+
+        if let ck = checkpointError as? AkashicSQLiteBundleError, ck == .walCheckpointBusy {
+            XCTAssertEqual(
+                readerMayExit.wait(timeout: .now() + 30),
+                .success,
+                "reader thread did not finish after busy checkpoint. \(diagBefore)"
+            )
+            // After reader releases its snapshot, truncating checkpoint must succeed (production path).
+            try grdb.writeWithoutTransaction { db in
+                try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
+            }
+            try grdb.close()
+            return
+        }
 
         XCTAssertEqual(
-            readerMayExit.wait(timeout: .now() + 5),
+            readerMayExit.wait(timeout: .now() + 30),
             .success,
             "reader thread did not finish after checkpoint. \(diagBefore)"
         )
-
-        if let ck = checkpointError as? AkashicSQLiteBundleError, ck == .walCheckpointBusy {
-            return
-        }
         let diagAfter = try walCheckpointDiagnostics(queue: grdb, label: "busy-test-after-failure")
+        try grdb.close()
+
         if checkpointError == nil {
             XCTFail("Expected .walCheckpointBusy; checkpoint succeeded. \(diagBefore)")
         } else {
@@ -473,10 +488,10 @@ final class FirstRunSetupFailureTests: XCTestCase {
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
         let q = try DatabaseQueue(path: url.path)
-        try q.write { db in
+        try q.writeWithoutTransaction { db in
             try db.execute(sql: "PRAGMA journal_mode = DELETE")
         }
-        try q.write { db in
+        try q.writeWithoutTransaction { db in
             try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
         }
         try q.close()
