@@ -43,7 +43,7 @@ final class NoteTagAPITests: XCTestCase {
     }
 
     func testNoteAPIDTOShape() throws {
-        let note = NoteItem.new(
+        let note = NoteItem.unsavedDraft(
             title: "T",
             body: "B",
             tags: [AkashicTag(name: "work", color: .purple)]

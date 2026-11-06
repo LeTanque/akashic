@@ -56,8 +56,7 @@ final class MainWindowChromeStripperView: NSView {
     private func installWindowObserversIfNeeded() {
         guard let window, window.title == "Akashic" else { return }
         let token = ObjectIdentifier(window)
-        guard !MainWindowChromeState.observedWindows.contains(token) else { return }
-        MainWindowChromeState.observedWindows.insert(token)
+        guard MainWindowChromeState.shared.markObserved(token) else { return }
 
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification,
@@ -135,6 +134,7 @@ enum MainWindowOpaqueFillClearer {
     }
 }
 
+@MainActor
 enum MainWindowSidebarToggleStripper {
     private static let togglePhrases = [
         "hide sidebar",
@@ -204,8 +204,18 @@ enum MainWindowSidebarToggleStripper {
     }
 }
 
-private enum MainWindowChromeState {
-    static var observedWindows = Set<ObjectIdentifier>()
+/// Tracks which NSWindows already received chrome setup. Lock-guarded for Swift 6.
+private final class MainWindowChromeState: @unchecked Sendable {
+    static let shared = MainWindowChromeState()
+    private let lock = NSLock()
+    private var observedWindows = Set<ObjectIdentifier>()
+
+    /// Returns true the first time `token` is seen.
+    func markObserved(_ token: ObjectIdentifier) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return observedWindows.insert(token).inserted
+    }
 }
 
 /// Leftover vertical gap from the system titlebar / `contentLayoutRect`, not neon insets.

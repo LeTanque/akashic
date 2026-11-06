@@ -36,13 +36,13 @@ final class CompletionCelebrationTests: XCTestCase {
     }
 
     func testShouldCelebrateSuccessfulSaveOnlyWhenPersisted() {
-        XCTAssertFalse(CompletionCelebration.shouldCelebrateSuccessfulSave(saveResult: nil))
+        XCTAssertFalse(CompletionCelebration.shouldCelebrateSuccessfulSave(didSave: false))
         let id = UUID()
         XCTAssertTrue(
-            CompletionCelebration.shouldCelebrateSuccessfulSave(saveResult: .created(id))
+            CompletionCelebration.shouldCelebrateSuccessfulSave(didSave: true)
         )
         XCTAssertTrue(
-            CompletionCelebration.shouldCelebrateSuccessfulSave(saveResult: .updated(id))
+            CompletionCelebration.shouldCelebrateSuccessfulSave(didSave: true)
         )
     }
 

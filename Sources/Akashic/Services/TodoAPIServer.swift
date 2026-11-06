@@ -139,7 +139,7 @@ final class TodoAPIServer: @unchecked Sendable {
                 return json(["error": tagError], status: .badRequest)
             }
             let tags = NoteTagAPIDecoding.decodeTags(from: object["tags"])
-            let draft = NoteItem.new(title: String(trimmed.prefix(200)), body: body, tags: tags)
+            let draft = NoteItem.unsavedDraft(title: String(trimmed.prefix(200)), body: body, tags: tags)
             let item = await MainActor.run {
                 noteStore.insertSavedNote(from: draft)
             }

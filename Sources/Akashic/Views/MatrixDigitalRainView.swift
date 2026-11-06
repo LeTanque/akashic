@@ -49,7 +49,8 @@ enum MatrixRainStyle {
 
 // MARK: - Glyph atlas (one-time text rasterization, fast per-frame mask fills)
 
-final class MatrixGlyphAtlas {
+/// Immutable after init (glyph masks); @unchecked Sendable for shared atlas use off MainActor draws.
+final class MatrixGlyphAtlas: @unchecked Sendable {
     static let shared = MatrixGlyphAtlas()
 
     let cellWidth: CGFloat

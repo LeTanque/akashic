@@ -39,7 +39,7 @@ final class NoteEditorSession: ObservableObject {
         case .updated(let id):
             store.selectedNoteID = id
         }
-        if CompletionCelebration.shouldCelebrateSuccessfulNoteSave(saveResult: result) {
+        if CompletionCelebration.shouldCelebrateSuccessfulNoteSave(didSave: result != nil) {
             store.triggerBreathingCelebration()
         }
         return true

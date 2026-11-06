@@ -27,7 +27,7 @@ struct TodoFormModel: Equatable {
     }
 
     static func blankItem() -> TodoItem {
-        TodoItem.new(title: "", description: "", priority: .medium)
+        TodoItem.unsavedDraft(title: "", description: "", priority: .medium)
     }
 
     var isNew: Bool { savedBaseline == nil }

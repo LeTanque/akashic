@@ -101,20 +101,20 @@ final class TodoStoreTests: XCTestCase {
     }
 
     func testDefaultStackOrderHighFirst() {
-        let high = TodoItem.new(title: "h", priority: .high)
-        var low = TodoItem.new(title: "l", priority: .low)
+        let high = TodoItem.unsavedDraft(title: "h", priority: .high)
+        var low = TodoItem.unsavedDraft(title: "l", priority: .low)
         low.updatedAt = high.updatedAt.addingTimeInterval(10)
         XCTAssertTrue(TodoItem.defaultStackOrder(high, low))
         XCTAssertFalse(TodoItem.defaultStackOrder(low, high))
 
-        var completedHigh = TodoItem.new(title: "done", priority: .high)
+        var completedHigh = TodoItem.unsavedDraft(title: "done", priority: .high)
         completedHigh.completed = true
         XCTAssertTrue(TodoItem.defaultStackOrder(low, completedHigh))
     }
 
     func testInsertionIndexPlacesMediumAfterHighs() {
-        let high = TodoItem.new(title: "H", priority: .high)
-        let low = TodoItem.new(title: "L", priority: .low)
+        let high = TodoItem.unsavedDraft(title: "H", priority: .high)
+        let low = TodoItem.unsavedDraft(title: "L", priority: .low)
         let items = [high, low]
         XCTAssertEqual(TodoStore.insertionIndex(for: .medium, in: items), 1)
         XCTAssertEqual(TodoStore.insertionIndex(for: .high, in: items), 0)
@@ -152,7 +152,7 @@ final class TodoStoreTests: XCTestCase {
     }
 
     func testHasSameEditableContentIgnoresTimestampsAndSortOrder() {
-        var a = TodoItem.new(title: "Same", description: "D", priority: .medium)
+        var a = TodoItem.unsavedDraft(title: "Same", description: "D", priority: .medium)
         var b = a
         b.updatedAt = a.updatedAt.addingTimeInterval(5)
         b.sortOrder = 9

@@ -1,8 +1,8 @@
 import Foundation
 
-enum NoteTagAPIDecoding {
+public enum NoteTagAPIDecoding {
     /// Accepts `[{"name":"work","color":"cyan"}]`, `["work","ideas"]`, or a mixed array.
-    static func decodeTags(from json: Any?) -> [AkashicTag] {
+    public static func decodeTags(from json: Any?) -> [AkashicTag] {
         guard let json else { return [] }
         if let strings = json as? [String] {
             return NoteTagNormalization.normalizeTags(
@@ -34,7 +34,7 @@ enum NoteTagAPIDecoding {
         }
     }
 
-    static func decodeTagsJSONData(_ data: Data) -> [AkashicTag] {
+    public static func decodeTagsJSONData(_ data: Data) -> [AkashicTag] {
         guard let raw = try? JSONSerialization.jsonObject(with: data) else { return [] }
         return decodeTags(from: raw)
     }
