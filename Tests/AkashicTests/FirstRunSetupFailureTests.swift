@@ -425,8 +425,8 @@ final class FirstRunSetupFailureTests: XCTestCase {
         try grdb.writeWithoutTransaction { db in
             try db.execute(sql: "PRAGMA journal_mode = WAL")
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
-            // So a contended checkpoint blocks up to 30s (then returns busy / SQLITE_BUSY) instead of failing instantly.
-            try db.execute(sql: "PRAGMA busy_timeout = 30000")
+            // Brief wait so a contended checkpoint returns busy deterministically without stretching the suite.
+            try db.execute(sql: "PRAGMA busy_timeout = 800")
         }
         try grdb.write { db in
             try db.execute(sql: "INSERT INTO wal_checkpoint_busy_probe (id) VALUES (2)")
@@ -684,7 +684,10 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertGreaterThan(SQLiteDiskBundleTestingHooks.unwindAttemptCount, 0, "unwind path should run")
         XCTAssertEqual(vault.presentation, .firstRun)
         XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
-        XCTAssertTrue(vault.setupError?.contains("could not roll back safely") == true)
+        XCTAssertTrue(
+            vault.setupError?.contains("could not roll back safely") == true,
+            "Expected standard manual-recovery copy after failed rollback; setupError=\(String(describing: vault.setupError))"
+        )
         XCTAssertTrue(vault.testingIsAPILocked)
         SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
         SQLiteDiskBundleTestingHooks.unwindFailure = nil

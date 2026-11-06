@@ -335,6 +335,26 @@ final class AkashicVaultController: ObservableObject {
                         backupPlaintextPath: migrationPlaintextBackupURL?.path
                     )
                 }
+                // `atomicSwapPlaintextForEncrypted` can throw `swapAndRestoreFailed` before returning the
+                // backup URL, so `migrationPlaintextBackupURL` is still nil even though a backup path exists on disk.
+                if let mig = error as? AkashicMigrationError,
+                   case let .swapAndRestoreFailed(backupPath, swapDetail, restoreDetail) = mig
+                {
+                    Self.handleManualRecoveryIfNeeded(
+                        result: .failure(
+                            NSError(
+                                domain: "AkashicMigration",
+                                code: 0,
+                                userInfo: [NSLocalizedDescriptionKey: restoreDetail]
+                            )
+                        ),
+                        setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
+                        setupError: &setupError,
+                        detail:
+                            "swap failed while encrypting the database (promoting encrypted file to live). Swap/revert detail: \(swapDetail)",
+                        backupPlaintextPath: backupPath
+                    )
+                }
                 if let backup = migrationPlaintextBackupURL {
                     Self.handleManualRecoveryIfNeeded(
                         result: Result { try rollbackPlaintextMigration(liveDB: dbURL, backupURL: backup) },
