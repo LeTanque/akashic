@@ -8,17 +8,25 @@ extension Notification.Name {
 @MainActor
 final class AkashicSettingsWindowController: NSObject {
     private var panel: AkashicSettingsPanel?
-    private weak var store: TodoStore?
-    private weak var settings: AkashicSettingsStore?
+    private weak var root: AkashicRootModel?
     private var escapeMonitor: Any?
 
-    func configure(store: TodoStore, settings: AkashicSettingsStore) {
-        self.store = store
-        self.settings = settings
+    func configure(root: AkashicRootModel) {
+        self.root = root
     }
 
     func showSettings() {
-        guard let store, let settings else { return }
+        guard let root else { return }
+        guard root.vault.presentation == .ready, let store = root.vault.todoStore else {
+            let alert = NSAlert()
+            alert.messageText = "Settings require an unlocked database"
+            alert.informativeText = "Unlock Akashic first, then open Settings."
+            alert.alertStyle = .informational
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+        let settings = root.settings
         if let panel {
             panel.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -32,11 +40,12 @@ final class AkashicSettingsWindowController: NSObject {
             y: visible.midY - size.height / 2
         )
 
-        let root = AkashicSettingsView(onDone: { [weak self] in self?.dismiss() })
+        let rootView = AkashicSettingsView(onDone: { [weak self] in self?.dismiss() })
             .environmentObject(store)
             .environmentObject(settings)
+            .environmentObject(root.vault)
 
-        let newPanel = AkashicSettingsPanel(rootView: root, size: size, origin: origin)
+        let newPanel = AkashicSettingsPanel(rootView: rootView, size: size, origin: origin)
         panel = newPanel
         newPanel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

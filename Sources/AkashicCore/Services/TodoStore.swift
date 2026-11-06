@@ -14,15 +14,6 @@ public final class TodoStore: ObservableObject {
     private let db: DatabaseQueue
     private var installation: InstallationContext
 
-    public init() {
-        db = (try? TodoDatabase.open()) ?? {
-            fatalError("Failed to open Akashic database")
-        }()
-        installation = try! db.write { try InstallationContext.loadOrCreate(in: $0) }
-        refresh()
-        runFirstLaunchSeedIfNeeded()
-    }
-
     /// Empty in-memory store for tests. Does not seed or start the HTTP API.
     public init(db: DatabaseQueue) {
         self.db = db
@@ -359,7 +350,8 @@ public final class TodoStore: ObservableObject {
         try entry.insert(db)
     }
 
-    private func runFirstLaunchSeedIfNeeded() {
+    /// Imports the bundled demo seed when the DB is still empty (once per install unless user replaced data).
+    public func runFirstLaunchSeedIfNeeded() {
         guard !UserDefaults.standard.bool(forKey: Self.seedImportDoneKey) else { return }
         let count = (try? db.read { try TodoItem.fetchCount($0) }) ?? 0
         guard count == 0 else { return }

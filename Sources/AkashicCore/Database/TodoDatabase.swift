@@ -2,40 +2,61 @@ import Foundation
 import GRDB
 
 public enum TodoDatabase {
-    public static func open() throws -> DatabaseQueue {
-        let url = try databaseURL()
+    /// Apply bundled schema migrations (used after `sqlcipher_export` and in tests).
+    public static var migrator: DatabaseMigrator {
+        Self.makeMigrator()
+    }
+
+    /// Live DB URL: `~/Library/Application Support/Akashic/akashic.sqlite` (or iOS equivalent).
+    public static func databaseURL() throws -> URL {
+        try AkashicPaths.databaseURL()
+    }
+
+    public static func encryptedConfiguration(passphrase: Data, label: String? = nil) -> Configuration {
+        var config = Configuration()
+        config.label = label ?? "AkashicEncrypted"
+        config.prepareDatabase { db in
+            try db.usePassphrase(passphrase)
+        }
+        return config
+    }
+
+    /// Opens the on-disk database with the SQLCipher data key, migrates, returns a queue.
+    public static func openEncrypted(at url: URL, passphrase: Data) throws -> DatabaseQueue {
+        var config = encryptedConfiguration(passphrase: passphrase)
+        let queue = try DatabaseQueue(path: url.path, configuration: config)
+        try migrator.migrate(queue)
+        return queue
+    }
+
+    /// Plain SQLite (legacy). Prefer only for reading pre-encryption files or in-memory tests.
+    public static func openPlain(at url: URL) throws -> DatabaseQueue {
         let queue = try DatabaseQueue(path: url.path)
         try migrator.migrate(queue)
         return queue
     }
 
-    /// Empty on-disk-less database for unit tests. Applies the same migrations as the live DB.
+    /// Creates a new empty encrypted database file (overwrites if caller removed existing temp).
+    public static func createEncryptedEmpty(at url: URL, passphrase: Data) throws -> DatabaseQueue {
+        let queue = try DatabaseQueue(path: url.path, configuration: encryptedConfiguration(passphrase: passphrase))
+        try migrator.migrate(queue)
+        return queue
+    }
+
     public static func openInMemory() throws -> DatabaseQueue {
         let queue = try DatabaseQueue()
         try migrator.migrate(queue)
         return queue
     }
 
-    /// Open (and migrate) an existing SQLite file at `path`. Used for migration dry-runs on a copy.
+    /// Open (and migrate) an existing SQLite file at `path`. Caller must use plain vs encrypted configuration.
     public static func open(at path: URL) throws -> DatabaseQueue {
         let queue = try DatabaseQueue(path: path.path)
         try migrator.migrate(queue)
         return queue
     }
 
-    private static func databaseURL() throws -> URL {
-        let appSupport = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let folder = appSupport.appendingPathComponent("Akashic", isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return folder.appendingPathComponent("akashic.sqlite")
-    }
-
-    private static var migrator: DatabaseMigrator {
+    private static func makeMigrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("createTodos") { db in
             try db.create(table: TodoItem.databaseTableName) { t in

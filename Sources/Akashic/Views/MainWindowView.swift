@@ -33,6 +33,7 @@ private enum NoteTagFilterOption: Hashable, Identifiable {
 
 struct MainWindowView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var root: AkashicRootModel
     @EnvironmentObject private var editorSession: TodoEditorSession
     @EnvironmentObject private var noteStore: NoteStore
     @EnvironmentObject private var noteEditorSession: NoteEditorSession
@@ -116,7 +117,11 @@ struct MainWindowView: View {
         .onAppear {
             editorSession.syncToSelection(store: store, selectedID: store.selectedTodoID)
             noteEditorSession.syncToSelection(store: noteStore, selectedID: noteStore.selectedNoteID)
-            AkashicAPIBootstrap.startIfNeeded(todoStore: store, noteStore: noteStore)
+            AkashicAPIBootstrap.startIfNeeded(
+                todoStore: store,
+                noteStore: noteStore,
+                apiService: root.api
+            )
         }
     }
 

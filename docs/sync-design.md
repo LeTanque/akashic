@@ -1,6 +1,6 @@
 # Akashic sync design (Phase 2+)
 
-This document describes the on-disk bookkeeping added in Phase 2 for offline-first, multi-device sync. Transport, encryption, and merge execution against a server are **not** implemented yet; the local app uses the same schema so data stays compatible when those layers land.
+This document describes the on-disk bookkeeping added in Phase 2 for offline-first, multi-device sync, and **Phase 3 local security** (encryption + login). Transport and merge execution against a server are **not** implemented yet; the local app uses the same schema so data stays compatible when those layers land.
 
 ## Goals
 
@@ -36,12 +36,65 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 
 `HybridLogicalClock` is `(wall_ms, counter, deviceId)` with lexicographic total order. `HybridLogicalClockSource` exposes `tick()` for local events and `receive(_:)` to jump ahead after observing remote clocks (standard Lamport-style HLC rules).
 
-## Phase 3+ (planned)
+## Security (Phase 3)
 
-1. **Encryption**: SQLCipher (or equivalent) for encrypted SQLite; unlock with password, TOTP, and biometrics where available.
-2. **Home server (e.g. Raspberry Pi)**: account directory, TOTP enrollment, **device registry** and approval (any already-approved device or recovery code can approve a new device).
-3. **Relay**: server stores **opaque** encrypted change batches (cannot read user data); devices exchange end-to-end encrypted deltas.
-4. **iPad app**: shares `AkashicCore`; same merge rules and schema.
+### SQLCipher + GRDB (SPM)
+
+- **Library:** [`sqlcipher/GRDB.swift`](https://github.com/sqlcipher/GRDB.swift) — a maintained fork of GRDB that builds against [`SQLCipher.swift`](https://github.com/sqlcipher/SQLCipher.swift) via Swift Package Manager with `SQLITE_HAS_CODEC` / `SQLCipher` defines. Same dependency graph on **macOS and iOS**, so the database file format is portable between Mac and iPad.
+- **Passphrase:** A random **256-bit data key** is passed to SQLCipher as `Database.usePassphrase(_:)` (binary `Data`). The file is not re-keyed when the user changes their password—only the **sidecar wraps** change (see below).
+
+### Key hierarchy (no raw key on disk)
+
+1. **Data key:** 32 random bytes; encrypts the SQLite file (SQLCipher).
+2. **Password wrap:** PBKDF2-HMAC-SHA256 (**600,000 iterations**, OWASP 2023-style recommendation), unique **16-byte salt** per wrap → derives a 256-bit KEK → **ChaCha20-Poly1305** (“combined” blob) wraps the data key.
+3. **Recovery wrap:** Same KDF parameters and AEAD, separate salt, wraps the same data key using the **recovery code** bytes (user normalizes to alphanumeric Base32; display is six groups of five Base32 characters).
+4. **Sidecar:** `~/Library/Application Support/Akashic/akashic-security.json` — username, salts, iteration counts, two wrapped blobs, and **TOTP secret sealed** with the data key (ChaChaPoly). The raw data key and raw TOTP secret are **not** stored in cleartext on disk.
+
+### TOTP (local second factor)
+
+- **RFC 6238**, HMAC-SHA1, **30 s** step, **6 digits**, standard `otpauth://totp/...` URI with QR during setup.
+- The secret is generated once at setup and stored in the sidecar **encrypted with the data key**, in a `LocalSecurityMetadata` shape a future server can mirror for enrollment.
+- Validation accepts clock skew **±1** period (~60 s window).
+
+### Biometrics
+
+- Optional: after successful unlock, the data key may be stored in the **Keychain** with **`.biometryCurrentSet`** access control (`SecAccessControlCreateWithFlags`). Unlock still requires the **current TOTP code**; biometrics only replaces re-entering the password when enabled.
+- Toggle + idle settings: **Settings → Security** (when unlocked).
+
+### Password change
+
+- Verifies the old password, derives a new wrapping key with a **new salt**, rewrites **only** `akashic-security.json`. **SQLCipher passphrase (data key) is unchanged** — no full DB re-encryption.
+
+### Plaintext migration (existing installs)
+
+1. If `akashic.sqlite` exists and its header looks like **standard SQLite** (not SQLCipher), first-run setup runs after the user sets credentials and proves TOTP.
+2. A temp encrypted file is created; **`ATTACH … KEY`** + `SELECT sqlcipher_export('encrypted')`** copies the plaintext DB into encrypted form.
+3. **Row counts** are compared for `todos`, `notes`, `tags`, `note_tags`, `app_meta`, `change_log` (missing tables count as 0).
+4. On success: **atomic replace** — plaintext moved to `akashic.sqlite.plaintext-backup-<ISO8601>` (with `:` → `-` in the timestamp), encrypted temp moved to `akashic.sqlite`. On **any failure**, the original plaintext file is left in place; the app does not delete the backup automatically (user removes it after verifying).
+
+### Data directory override
+
+- Environment variable **`AKASHIC_DATA_DIR`**: absolute path used as the vault folder (DB + `akashic-security.json`) instead of Application Support / `Akashic`. For dry-runs and DoD only; unset in production.
+
+### App lock vs local API
+
+- App starts **locked** (cyberpunk-themed unlock window); menu-bar icon remains.
+- Auto-lock: configurable idle timeout (default **15 minutes**), plus **sleep/screen lock**; manual **Lock Akashic** in the menu.
+- **`GET /health`** always succeeds; **`/api/*` returns HTTP 423** with a small JSON body while locked.
+
+### AutoFill / Passwords app
+
+- Fields use `textContentType` for username, password, and one-time code. **Saving to the Passwords app with automatic website fill** typically requires **Associated Domains** and a **paid Apple Developer Program** membership; without that, use **manual secret entry** or the **QR code** from setup.
+
+### Unverified in CI (this agent)
+
+- Full build, Keychain biometrics prompts, and SQLCipher linkage were **not** run on Linux; a Mac builder should compile and run `swift test` / `xcodebuild`.
+
+## Phase 4+ (planned)
+
+1. **Home server (e.g. Raspberry Pi)**: account directory, TOTP enrollment, **device registry** and approval (any already-approved device or recovery code can approve a new device).
+2. **Relay**: server stores **opaque** encrypted change batches (cannot read user data); devices exchange end-to-end encrypted deltas.
+3. **iPad app**: shares `AkashicCore`; same merge rules, schema, and security sidecar layout.
 
 ## Manual verification (Phase 2 PR)
 
@@ -49,3 +102,11 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 - Existing local data survives migration; counts and content match (e.g. todos, notes, tags).
 - Delete still removes items from lists (rows are tombstoned in DB, not shown).
 - Local HTTP API on port **4311** still serves reads/writes through stores (tombstones excluded).
+
+## Manual verification (Phase 3 PR)
+
+- First launch: setup shows recovery + TOTP QR; TOTP confirmation required before encrypt/migrate.
+- Plaintext → encrypted migration: table row counts match; plaintext backup file appears with expected name pattern.
+- Wrong password or TOTP fails unlock; changing password rewraps sidecar only.
+- API returns **423** on data routes while locked; **200** on `/health`.
+- Optional: Touch ID path prompts and unlocks when TOTP is correct.
