@@ -621,7 +621,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         let vault = makeVault()
         vault.start()
         await waitUntil { vault.presentation == .firstRun && vault.setupRequiresManualRecoveryReason != nil }
-        XCTAssertTrue(vault.setupRequiresManualRecoveryReason?.contains("plaintext backup exists") == true)
+        XCTAssertTrue(vault.setupRequiresManualRecoveryReason?.contains("plaintext database backup exists at") == true)
     }
 
     // MARK: - Helpers (non-WAL)
