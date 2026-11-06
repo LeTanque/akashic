@@ -7,6 +7,8 @@ public enum SQLiteDiskBundleTestingHooks {
     public nonisolated(unsafe) static var moveBundleFailAfterNSuccessfulMoves: Int? = nil
     /// When set, `unwindPartialBundleMoves` throws (simulates irrecoverable partial move).
     public nonisolated(unsafe) static var unwindFailure: Error?
+    /// Incremented each time `unwindPartialBundleMoves` runs (package tests).
+    public nonisolated(unsafe) static var unwindAttemptCount: Int = 0
 }
 
 /// Paths for a single SQLite database path `*.sqlite`: sidecars are **`path-wal`**, **`path-shm`**, **`path-journal`** (not path-extension swaps).
@@ -97,6 +99,7 @@ public enum SQLiteDiskBundle {
     }
 
     private static func unwindPartialBundleMoves(_ completedMoves: [(src: URL, dst: URL)]) throws {
+        SQLiteDiskBundleTestingHooks.unwindAttemptCount += 1
         if let err = SQLiteDiskBundleTestingHooks.unwindFailure {
             throw err
         }

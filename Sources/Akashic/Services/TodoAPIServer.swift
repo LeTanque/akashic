@@ -4,13 +4,23 @@ import FlyingSocks
 
 /// In-process localhost HTTP API. Same GRDB/SQLite store as the UI — no separate database.
 final class TodoAPIServer: @unchecked Sendable {
-    static let port: UInt16 = 4311
+    static let defaultPort: UInt16 = 4311
+
+    /// Override with env **`AKASHIC_API_PORT`** (e.g. package tests avoid binding the live default **4311**).
+    private static func listenPort() -> UInt16 {
+        if let raw = ProcessInfo.processInfo.environment["AKASHIC_API_PORT"],
+           let n = UInt16(raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+           n > 0 {
+            return n
+        }
+        return defaultPort
+    }
 
     private var runTask: Task<Void, Never>?
 
     func start(store: TodoStore, noteStore: NoteStore, apiService: AkashicAPIService) {
         stop()
-        let port = Self.port
+        let port = Self.listenPort()
         runTask = Task.detached(priority: .utility) {
             // IPv4 localhost so http://127.0.0.1:4311 and http://localhost:4311 both work.
             guard let address = try? sockaddr_in.inet(ip4: "127.0.0.1", port: port) else {
@@ -30,7 +40,7 @@ final class TodoAPIServer: @unchecked Sendable {
     /// Locked vault: `/health` stays 200; all `/api/*` return 423. No DB handles held.
     func startLockedOnly(apiService: AkashicAPIService) {
         stop()
-        let port = Self.port
+        let port = Self.listenPort()
         runTask = Task.detached(priority: .utility) {
             guard let address = try? sockaddr_in.inet(ip4: "127.0.0.1", port: port) else {
                 NSLog("Akashic API server: failed to bind 127.0.0.1:%d", port)
