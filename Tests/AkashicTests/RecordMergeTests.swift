@@ -40,10 +40,11 @@ final class RecordMergeTests: XCTestCase {
     }
 
     func testNonConflictingFieldMerge() {
+        // Same text values (no concat) + concurrent scalar edit → LWW by HLC+deviceId.
         let vA = VersionVector(map: [dA: hlc(100, 0, dA)])
         let vB = VersionVector(map: [dB: hlc(100, 0, dB)])
         let local = snapTodo(
-            title: "A",
+            title: "Same",
             description: "shared",
             titleClock: hlc(100, 0, dA),
             descClock: hlc(50, 0, dA),
@@ -56,7 +57,7 @@ final class RecordMergeTests: XCTestCase {
             entity: .todo,
             recordId: local.recordId,
             textFields: [
-                "title": ("B", hlc(100, 0, dB)),
+                "title": ("Same", hlc(100, 0, dB)),
                 "description": ("shared", hlc(50, 0, dB)),
             ],
             scalars: remoteScalars,
@@ -66,7 +67,8 @@ final class RecordMergeTests: XCTestCase {
             version: vB
         )
         let merged = RecordMerge.mergeRecord(local: local, remote: remote)
-        XCTAssertEqual(merged.textFields["title"]?.value, "B")
+        XCTAssertEqual(merged.textFields["title"]?.value, "Same")
+        XCTAssertFalse(merged.textFields["title"]!.value.contains("merged from"))
         XCTAssertEqual(merged.scalars["priority"]?.value, .string(TodoPriority.high.rawValue))
     }
 
@@ -147,7 +149,7 @@ final class RecordMergeTests: XCTestCase {
         let vDel = VersionVector(map: [dA: hlc(50, 0, dA)])
         let tomb = MergeSnapshot(
             entity: .todo,
-            recordId: "x",
+            recordId: "same-id",
             textFields: [:],
             scalars: [:],
             deletedAt: Date(),

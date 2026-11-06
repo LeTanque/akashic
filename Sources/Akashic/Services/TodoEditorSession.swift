@@ -39,7 +39,7 @@ final class TodoEditorSession: ObservableObject {
         case .updated(let id):
             store.selectedTodoID = id
         }
-        if CompletionCelebration.shouldCelebrateSuccessfulSave(saveResult: result) {
+        if CompletionCelebration.shouldCelebrateSuccessfulSave(didSave: result != nil) {
             store.triggerBreathingCelebration()
         }
         return true

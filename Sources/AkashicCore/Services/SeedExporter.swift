@@ -1,27 +1,28 @@
 import Foundation
 
-struct CyberpunkSeedExportFile: Encodable {
-    let source: String
-    let todos: [CyberpunkSeedExportTodo]
+public struct CyberpunkSeedExportFile: Encodable, Sendable {
+    public let source: String
+    public let todos: [CyberpunkSeedExportTodo]
 }
 
-struct CyberpunkSeedExportTodo: Encodable {
-    let id: Int
-    let title: String
-    let completed: Bool
-    let priority: String
-    let created_at: String
-    let updated_at: String
+public struct CyberpunkSeedExportTodo: Encodable, Sendable {
+    public let id: Int
+    public let title: String
+    public let completed: Bool
+    public let priority: String
+    public let created_at: String
+    public let updated_at: String
 }
 
 public enum SeedExporter {
-    private static let isoFormatter: ISO8601DateFormatter = {
+    private static func makeISOFormatter() -> ISO8601DateFormatter {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
-    }()
+    }
 
     public static func exportFile(from todos: [TodoItem], source: String = "akashic export") -> CyberpunkSeedExportFile {
+        let isoFormatter = makeISOFormatter()
         let ordered = todos.sorted { lhs, rhs in
             if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
             return lhs.updatedAt > rhs.updatedAt

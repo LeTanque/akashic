@@ -32,7 +32,7 @@ public struct VersionVector: Equatable, Hashable, Sendable, Codable {
             guard let dClock = descendant.map[device] else { return false }
             if aClock > dClock { return false }
         }
-        true
+        return true
     }
 
     /// Combined vector used as merged record parent identity (component-wise max by HLC).

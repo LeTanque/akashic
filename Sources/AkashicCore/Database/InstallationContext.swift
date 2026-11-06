@@ -1,18 +1,18 @@
 import Foundation
 import GRDB
 
-public struct AppMetaRecord: FetchableRecord, PersistableRecord, TableRecord {
+public struct AppMetaRecord: Codable, FetchableRecord, PersistableRecord, TableRecord {
     public static let databaseTableName = "app_meta"
 
-    enum Columns: String, ColumnExpression {
+    public enum Columns: String, ColumnExpression {
         case key
         case value
     }
 
-    var key: String
-    var value: String
+    public var key: String
+    public var value: String
 
-    init(key: String, value: String) {
+    public init(key: String, value: String) {
         self.key = key
         self.value = value
     }

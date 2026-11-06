@@ -363,6 +363,7 @@ private struct WindowUnsavedChangesGuard: NSViewRepresentable {
         context.coordinator.noteStore = noteStore
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSWindowDelegate {
         var workspaceTab: MainAppTab
         var todoSession: TodoEditorSession
@@ -386,8 +387,9 @@ private struct WindowUnsavedChangesGuard: NSViewRepresentable {
         }
 
         func attach(to view: NSView) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let window = view.window else { return }
+            // Window is often nil in makeNSView; hop to next main turn once the view is in a hierarchy.
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let window = view?.window else { return }
                 if self.window !== window {
                     self.window?.delegate = nil
                     self.window = window

@@ -16,17 +16,13 @@ struct CyberpunkSeedTodo: Decodable {
 }
 
 public enum SeedImporter {
-    private static let isoFormatter: ISO8601DateFormatter = {
+    private static func makeISOFormatter(fractional: Bool) -> ISO8601DateFormatter {
         let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        f.formatOptions = fractional
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
         return f
-    }()
-
-    private static let isoFormatterNoFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    }
 
     public static func parseSeedData(_ data: Data) throws -> [TodoItem] {
         let seed = try JSONDecoder().decode(CyberpunkSeedFile.self, from: data)
@@ -111,6 +107,8 @@ public enum SeedImporter {
     }
 
     private static func parseDate(_ string: String) -> Date? {
-        isoFormatter.date(from: string) ?? isoFormatterNoFraction.date(from: string)
+        makeISOFormatter(fractional: true).date(from: string)
+            ?? makeISOFormatter(fractional: false).date(from: string)
     }
 }
+

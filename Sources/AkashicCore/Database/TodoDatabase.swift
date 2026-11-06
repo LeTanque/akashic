@@ -16,6 +16,13 @@ public enum TodoDatabase {
         return queue
     }
 
+    /// Open (and migrate) an existing SQLite file at `path`. Used for migration dry-runs on a copy.
+    public static func open(at path: URL) throws -> DatabaseQueue {
+        let queue = try DatabaseQueue(path: path.path)
+        try migrator.migrate(queue)
+        return queue
+    }
+
     private static func databaseURL() throws -> URL {
         let appSupport = try FileManager.default.url(
             for: .applicationSupportDirectory,
