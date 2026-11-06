@@ -3,6 +3,7 @@ import SwiftUI
 
 enum AkashicSettingsTab: String, CaseIterable, Identifiable {
     case appearance = "Appearance"
+    case security = "Security"
     case importExport = "Import/Export"
 
     var id: String { rawValue }
@@ -10,10 +11,15 @@ enum AkashicSettingsTab: String, CaseIterable, Identifiable {
 
 struct AkashicSettingsView: View {
     @EnvironmentObject private var store: TodoStore
+    @EnvironmentObject private var vault: AkashicVaultController
     @EnvironmentObject private var settings: AkashicSettingsStore
     let onDone: () -> Void
 
     @State private var tab: AkashicSettingsTab = .appearance
+    @State private var passwordChangeOld = ""
+    @State private var passwordChangeNew = ""
+    @State private var passwordChangeConfirm = ""
+    @State private var passwordChangeMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -88,9 +94,68 @@ struct AkashicSettingsView: View {
         switch tab {
         case .appearance:
             appearanceTab
+        case .security:
+            securityTab
         case .importExport:
             importExportTab
         }
+    }
+
+    private var securityTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("SESSION")
+            Text("Auto-lock after idle time (0 disables). Also locks on sleep.")
+                .font(AkashicSettingsChrome.font(10))
+                .foregroundStyle(AkashicSettingsChrome.label)
+            Picker("Idle minutes", selection: $vault.autoLockIdleMinutes) {
+                Text("Disabled").tag(0)
+                Text("5").tag(5)
+                Text("10").tag(10)
+                Text("15").tag(15)
+                Text("30").tag(30)
+                Text("60").tag(60)
+            }
+            .pickerStyle(.menu)
+
+            toggleRow(
+                title: "Touch ID after unlock",
+                subtitle: "Store the database key in Keychain for biometric unlock",
+                isOn: Binding(
+                    get: { vault.biometricUnlockEnabled },
+                    set: { vault.updateBiometricPreference(enabled: $0) }
+                )
+            )
+
+            sectionTitle("PASSWORD")
+            SecureField("Current password", text: $passwordChangeOld)
+                .textContentType(.password)
+            SecureField("New password", text: $passwordChangeNew)
+                .textContentType(.newPassword)
+            SecureField("Confirm new password", text: $passwordChangeConfirm)
+                .textContentType(.newPassword)
+            AkashicSettingsButton(title: "CHANGE PASSWORD") {
+                passwordChangeMessage = nil
+                do {
+                    try vault.changePassword(
+                        oldPassword: passwordChangeOld,
+                        newPassword: passwordChangeNew,
+                        confirmPassword: passwordChangeConfirm
+                    )
+                    passwordChangeOld = ""
+                    passwordChangeNew = ""
+                    passwordChangeConfirm = ""
+                    passwordChangeMessage = "Password updated (database key unchanged)."
+                } catch {
+                    passwordChangeMessage = "Could not change password. Check current password."
+                }
+            }
+            if let passwordChangeMessage {
+                Text(passwordChangeMessage)
+                    .font(AkashicSettingsChrome.font(10))
+                    .foregroundStyle(AkashicSettingsChrome.accent)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var appearanceTab: some View {

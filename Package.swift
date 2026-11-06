@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
@@ -12,7 +12,8 @@ let package = Package(
         .library(name: "AkashicCore", targets: ["AkashicCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
+        // GRDB linked against SQLCipher (SPM). See docs/sync-design.md — same format macOS + iPad.
+        .package(url: "https://github.com/sqlcipher/GRDB.swift.git", from: "7.10.0"),
         .package(url: "https://github.com/swhitty/FlyingFox.git", from: "0.22.0"),
     ],
     targets: [

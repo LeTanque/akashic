@@ -3,34 +3,16 @@ import AppKit
 
 @main
 struct AkashicApp: App {
-    @StateObject private var store = TodoStore()
-    @StateObject private var noteStore = NoteStore()
-    @StateObject private var editorSession = TodoEditorSession()
-    @StateObject private var noteEditorSession = NoteEditorSession()
-    @StateObject private var textZoom = TextZoomStore()
-    @StateObject private var sidebarVisibility = SidebarVisibilityStore()
-    @StateObject private var mainSectionVisibility = MainSectionVisibilityStore()
-    @StateObject private var settings = AkashicSettingsStore()
+    @StateObject private var root = AkashicRootModel()
     @NSApplicationDelegateAdaptor(AkashicAppDelegate.self) private var appDelegate
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarMenuView()
-                .environmentObject(store)
-                .environmentObject(editorSession)
-                .environmentObject(sidebarVisibility)
-                .environmentObject(mainSectionVisibility)
-                .environmentObject(settings)
-                .background(AppDelegateBinding(
-                    store: store,
-                    noteStore: noteStore,
-                    editorSession: editorSession,
-                    noteEditorSession: noteEditorSession,
-                    settings: settings,
-                    appDelegate: appDelegate
-                ))
+                .environmentObject(root)
+                .background(AppDelegateBinding(root: root, appDelegate: appDelegate))
         } label: {
-            Label("Akashic", systemImage: settings.menuBarSymbolName)
+            Label("Akashic", systemImage: root.settings.menuBarSymbolName)
         }
         .menuBarExtraStyle(.menu)
         .commands {
@@ -39,25 +21,9 @@ struct AkashicApp: App {
         }
 
         Window("Akashic", id: "main") {
-            MainWindowView()
-                .environmentObject(store)
-                .environmentObject(noteStore)
-                .environmentObject(editorSession)
-                .environmentObject(noteEditorSession)
-                .environmentObject(textZoom)
-                .environmentObject(sidebarVisibility)
-                .environmentObject(mainSectionVisibility)
-                .environmentObject(settings)
-                .akashicTextZoom(textZoom)
+            AkashicVaultRootView(root: root)
                 .background(LaunchOpenMainWindow())
-                .background(AppDelegateBinding(
-                    store: store,
-                    noteStore: noteStore,
-                    editorSession: editorSession,
-                    noteEditorSession: noteEditorSession,
-                    settings: settings,
-                    appDelegate: appDelegate
-                ))
+                .background(AppDelegateBinding(root: root, appDelegate: appDelegate))
                 .onAppear {
                     NSApp.activate(ignoringOtherApps: true)
                 }
@@ -69,17 +35,20 @@ struct AkashicApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Todo") {
-                    _ = editorSession.beginNewTodo(store: store)
+                    guard let store = root.vault.todoStore else { return }
+                    _ = root.editorSession.beginNewTodo(store: store)
                     NotificationCenter.default.post(name: .akashicOpenMainWindow, object: nil)
                 }
                 .keyboardShortcut("n", modifiers: .command)
+                .disabled(root.vault.presentation != .ready)
             }
             CommandGroup(after: .saveItem) {
                 Button("Save Todo") {
-                    _ = editorSession.save(store: store)
+                    guard let store = root.vault.todoStore else { return }
+                    _ = root.editorSession.save(store: store)
                 }
                 .keyboardShortcut("s", modifiers: .command)
-                .disabled(!editorSession.form.canSave)
+                .disabled(root.vault.presentation != .ready || !root.editorSession.form.canSave)
             }
             appMenuCommands
             viewCommands
@@ -99,25 +68,25 @@ struct AkashicApp: App {
     @CommandsBuilder
     private var viewCommands: some Commands {
         CommandMenu("View") {
-            Button(sidebarVisibility.toggleMenuTitle) {
-                sidebarVisibility.toggle()
+            Button(root.sidebarVisibility.toggleMenuTitle) {
+                root.sidebarVisibility.toggle()
             }
             .keyboardShortcut("s", modifiers: [.command, .option])
 
-            Button(mainSectionVisibility.toggleMenuTitle) {
-                mainSectionVisibility.toggle()
+            Button(root.mainSectionVisibility.toggleMenuTitle) {
+                root.mainSectionVisibility.toggle()
             }
             .keyboardShortcut("e", modifiers: [.command, .option])
 
             Divider()
 
-            Button("Zoom In") { textZoom.zoomIn() }
+            Button("Zoom In") { root.textZoom.zoomIn() }
                 .keyboardShortcut("+", modifiers: .command)
-                .disabled(!textZoom.canZoomIn)
-            Button("Zoom Out") { textZoom.zoomOut() }
+                .disabled(!root.textZoom.canZoomIn)
+            Button("Zoom Out") { root.textZoom.zoomOut() }
                 .keyboardShortcut("-", modifiers: .command)
-                .disabled(!textZoom.canZoomOut)
-            Button("Actual Size") { textZoom.reset() }
+                .disabled(!root.textZoom.canZoomOut)
+            Button("Actual Size") { root.textZoom.reset() }
                 .keyboardShortcut("0", modifiers: .command)
         }
     }
@@ -148,30 +117,21 @@ private struct LaunchOpenMainWindow: View {
 
 extension Notification.Name {
     static let akashicOpenMainWindow = Notification.Name("akashic.openMainWindow")
+    static let akashicRequestLock = Notification.Name("akashic.requestLock")
 }
 
 @MainActor
 final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     private let settingsController = AkashicSettingsWindowController()
     private var openSettingsObserver: NSObjectProtocol?
-    private weak var store: TodoStore?
-    private weak var noteStore: NoteStore?
-    private weak var editorSession: TodoEditorSession?
-    private weak var noteEditorSession: NoteEditorSession?
+    private var lockObserver: NSObjectProtocol?
+    private weak var root: AkashicRootModel?
 
-    func bind(
-        store: TodoStore,
-        noteStore: NoteStore,
-        editorSession: TodoEditorSession,
-        noteEditorSession: NoteEditorSession,
-        settings: AkashicSettingsStore
-    ) {
-        self.store = store
-        self.noteStore = noteStore
-        self.editorSession = editorSession
-        self.noteEditorSession = noteEditorSession
-        settingsController.configure(store: store, settings: settings)
-        settings.applyActivationPolicyAtLaunch()
+    func bind(root: AkashicRootModel) {
+        self.root = root
+        settingsController.configure(root: root)
+        root.settings.applyActivationPolicyAtLaunch()
+        root.vault.start()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -182,6 +142,16 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.settingsController.showSettings()
+            }
+        }
+
+        lockObserver = NotificationCenter.default.addObserver(
+            forName: .akashicRequestLock,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleLockRequest()
             }
         }
 
@@ -200,31 +170,39 @@ final class AkashicAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let store, let noteStore, let editorSession, let noteEditorSession else { return .terminateNow }
-        guard editorSession.confirmQuit(store: store) else { return .terminateCancel }
-        return noteEditorSession.confirmQuit(store: noteStore) ? .terminateNow : .terminateCancel
+        guard let root else { return .terminateNow }
+        guard let store = root.vault.todoStore, let noteStore = root.vault.noteStore else { return .terminateNow }
+        guard root.editorSession.confirmQuit(store: store) else { return .terminateCancel }
+        return root.noteEditorSession.confirmQuit(store: noteStore) ? .terminateNow : .terminateCancel
+    }
+
+    private func handleLockRequest() {
+        guard let root else { return }
+        guard root.vault.presentation == .ready else {
+            root.vault.lock()
+            return
+        }
+        guard let store = root.vault.todoStore, let noteStore = root.vault.noteStore else {
+            root.vault.lock()
+            return
+        }
+        let todoOK = root.editorSession.resolveUnsavedChanges(store: store)
+        let noteOK = root.noteEditorSession.resolveUnsavedChanges(store: noteStore)
+        if todoOK, noteOK {
+            root.vault.lock()
+        }
     }
 }
 
 private struct AppDelegateBinding: View {
-    let store: TodoStore
-    let noteStore: NoteStore
-    let editorSession: TodoEditorSession
-    let noteEditorSession: NoteEditorSession
-    let settings: AkashicSettingsStore
+    let root: AkashicRootModel
     let appDelegate: AkashicAppDelegate
 
     var body: some View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear {
-                appDelegate.bind(
-                    store: store,
-                    noteStore: noteStore,
-                    editorSession: editorSession,
-                    noteEditorSession: noteEditorSession,
-                    settings: settings
-                )
+                appDelegate.bind(root: root)
             }
     }
 }

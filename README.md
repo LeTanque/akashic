@@ -7,7 +7,7 @@ Native macOS menu-bar todo app (SwiftUI + SQLite). Accessory app with no Dock ic
 ## Requirements
 
 - macOS 15 or later
-- Xcode 16+ or Swift 6 toolchain (`Package.swift` uses `swift-tools-version: 6.0`)
+- Xcode **16.3+** / Swift **6.1+** (`Package.swift` uses `swift-tools-version: 6.1` — required for the SQLCipher-backed GRDB dependency)
 
 Shared logic (models, database, sync bookkeeping, merge helpers) lives in the **`AkashicCore`** library target (macOS 15 + iOS 17); the `Akashic` executable is the menu-bar app.
 
@@ -31,29 +31,41 @@ open -a Akashic
 
 ## Data (important)
 
-**Live todos are local-only.** The SQLite database lives outside the git tree:
+**Local-only, encrypted at rest.** Akashic uses **SQLCipher** (via GRDB) for `akashic.sqlite`. A separate **`akashic-security.json`** file in the same folder stores **wrapped** database keys and KDF parameters — never the raw key.
 
 ```text
 ~/Library/Application Support/Akashic/akashic.sqlite
+~/Library/Application Support/Akashic/akashic-security.json
 ```
 
-Do **not** commit that file, exports of personal todos, or dumps named like `seed-from-*.json`. Those patterns are gitignored.
+Do **not** commit those files, exports of personal todos, or dumps named like `seed-from-*.json`. Those patterns are gitignored.
 
-On **first launch with an empty database**, Akashic imports the bundled **demo** seed (`Sources/AkashicCore/Resources/akashic-seed-todos.json`). That seed is sample content only — replace it with your own local list in Application Support; never put personal todos in the bundled seed.
+**First launch / upgrade:** You create a local account (username, password), save a **one-time recovery code** and scan a **TOTP** QR (RFC 6238: SHA-1, 30s, 6 digits). If an older **plaintext** `akashic.sqlite` is already on disk, Akashic migrates it with **`sqlcipher_export`**, verifies row counts for every table, atomically swaps in the encrypted file, and renames the original to `akashic.sqlite.plaintext-backup-<timestamp>` — **delete that backup yourself after verifying**. Auto-deleting it would remove your safety net.
 
-Sync-oriented schema and merge rules are described in [docs/sync-design.md](docs/sync-design.md).
+On **first successful unlock with an empty DB**, Akashic imports the bundled **demo** seed (`Sources/AkashicCore/Resources/akashic-seed-todos.json`). That seed is sample content only.
+
+**Passwords / AutoFill:** Text fields use `textContentType` for username, password, and one-time code. Saving credentials to the **Passwords** app with automatic form filling on a website usually needs **Associated Domains** and a **paid Apple Developer** account; without that, use **manual entry** or scan the setup QR.
+
+**Biometrics (optional):** After password unlock, you can store the data key in the Keychain with `Touch ID` / Face ID (`LocalAuthentication`); unlocking still requires the current TOTP code.
+
+**Lock:** The app starts locked; **auto-lock** after configurable idle time (default 15 minutes) and on **sleep**; use **Lock Akashic** in the menu-bar menu.
+
+Sync-oriented schema, crypto details, and merge rules are in [docs/sync-design.md](docs/sync-design.md).
 
 Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar menu only when you intentionally want to load sample or your own exported JSON into the local DB. Both actions ask for confirmation because they replace your current todos.
 
 ## Embedded API (FlyingFox)
 
-While Akashic is running, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
+While Akashic is running **unlocked**, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same encrypted SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
+
+When the app is **locked**, data routes return **HTTP 423 Locked** (see table below). `GET /health` still responds.
 
 The main-window **top header chrome** (`CyberHeaderStrip`) keeps the Akashic wordmark **centered in the window** and the add/sidebar controls on the **trailing** edge; the leading slot is empty space so the logo stays optically centered.
 
 | Method | Path | Notes |
 |--------|------|--------|
 | `GET` | `/health` | `{ "status", "database", "app" }` |
+| `*` | `/api/*` (when locked) | **423** `{ "error": "locked", … }` |
 | `GET` | `/api/todos?status=all\|active\|completed` | `{ "todos": [ … ] }` |
 | `POST` | `/api/todos` | Body: `{ "title", "description?", "priority?" }` → `201` |
 | `PATCH` | `/api/todos/:id` | Body may include `title`, `description`, `completed`, `priority`, `complete_by` |
@@ -130,4 +142,4 @@ Other useful flags: `--db PATH`, `--dry-run`, `--write-seed PATH` (save the fetc
 - App chrome uses smoked-glass vibrancy (`NSVisualEffectView` HUD material) with a light black veil; neon frame stays on top.
 - Title and description support Markdown, including tappable links, headings, and bullet lists. Both editor fields keep a raw-source `NSTextView` (smart quotes/dashes off so `- ` list markers survive) and a live formatted preview from the same renderer as list rows. SQLite stores the raw markdown strings.
 - Priority: high / medium / low. Optional **complete by** date and time; **created on** and **completed at** are stored and shown when set.
-- Dependencies: [GRDB](https://github.com/groue/GRDB.swift), [FlyingFox](https://github.com/swhitty/FlyingFox).
+- Dependencies: [GRDB + SQLCipher (SPM fork)](https://github.com/sqlcipher/GRDB.swift), [FlyingFox](https://github.com/swhitty/FlyingFox).
