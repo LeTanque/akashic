@@ -366,7 +366,7 @@ final class AkashicVaultController: ObservableObject {
                     migrationPlaintextBackupURL = nil
                 }
                 if setupRequiresManualRecoveryReason == nil {
-                    let msg = Self.migrationSetupErrorMessage(for: error)
+                    let msg = Self.migrationSetupErrorMessage(for: error, dataFolderPath: folder.path)
                     setupError = msg
                     if Self.migrationFailureRequiresManualRecovery(error) {
                         setupRequiresManualRecoveryReason = msg
@@ -477,7 +477,7 @@ final class AkashicVaultController: ObservableObject {
         }
     }
 
-    private static func migrationSetupErrorMessage(for error: Error) -> String {
+    private static func migrationSetupErrorMessage(for error: Error, dataFolderPath: String) -> String {
         if let bundle = error as? AkashicSQLiteBundleError {
             switch bundle {
             case .walCheckpointBusy:
@@ -487,7 +487,8 @@ final class AkashicVaultController: ObservableObject {
             case let .walCheckpointFailed(reason):
                 return "Could not prepare your existing database for encryption: \(reason)"
             case let .bundleMoveUnwindFailed(originalDescription, unwindDescription):
-                return "Could not encrypt or replace your existing database (partial file move then unwind failed). Original: \(originalDescription). Unwind: \(unwindDescription). Check the Akashic data folder."
+                return
+                    "Could not encrypt or replace your existing database (partial file move then unwind failed). Original: \(originalDescription). Unwind: \(unwindDescription). Check the Akashic data folder at: \(dataFolderPath). If migration created a plaintext backup, look for a sibling file named like akashic.sqlite.plaintext-backup- followed by a timestamp in that folder."
             case .simulatedMoveFailure:
                 return "Could not encrypt or replace your existing database: \(error.localizedDescription)"
             }

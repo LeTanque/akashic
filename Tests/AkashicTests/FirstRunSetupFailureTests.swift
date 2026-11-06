@@ -60,6 +60,8 @@ final class FirstRunSetupFailureTests: XCTestCase {
         TodoDatabaseTestingHooks.openEncryptedFailure = nil
         TodoDatabaseTestingHooks.openEncryptedFailOnce = nil
         SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
+        SQLiteDiskBundleTestingHooks.moveBundleFailHooksIgnoreFirstInvocations = nil
+        SQLiteDiskBundleTestingHooks.moveBundleInvocationCount = 0
         SQLiteDiskBundleTestingHooks.unwindFailure = nil
         SetupMigrationJournalTestingHooks.saveFailure = nil
         SetupMigrationJournalTestingHooks.saveInvocationCount = 0
@@ -661,9 +663,13 @@ final class FirstRunSetupFailureTests: XCTestCase {
         )
     }
 
+    /// **Rollback after successful swap:** `openEncrypted` fails once; restoring plaintext from backup fails on the
+    /// first moved file, then unwind throws. Hooks skip the swap `moveBundle` invocations so migration completes first.
     func testRollbackFailureSurfacesManualRecoveryAndBlocksWizard() async throws {
         _ = try installWALPlaintextDatabaseFixture(withPendingInsert: false)
         try releaseWalFixtureConnection()
+
+        let dataFolder = tempRoot!
 
         let vault = makeVault()
         await startVaultForFirstRun(vault)
@@ -672,7 +678,8 @@ final class FirstRunSetupFailureTests: XCTestCase {
         TodoDatabaseTestingHooks.openEncryptedFailOnce = NSError(
             domain: "TestOpenOnce", code: 9, userInfo: [NSLocalizedDescriptionKey: "fail once"]
         )
-        // Fail while restoring the plaintext bundle from backup (after first moved file), then fail bundle unwind.
+        // Swap uses two `moveBundle` calls (backup off live, then promote temp). Arm faults only for rollback restore.
+        SQLiteDiskBundleTestingHooks.moveBundleFailHooksIgnoreFirstInvocations = 2
         SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = 1
         SQLiteDiskBundleTestingHooks.unwindFailure = NSError(
             domain: "TestUnwind", code: 3, userInfo: [NSLocalizedDescriptionKey: "simulated unwind failure"]
@@ -684,13 +691,69 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertGreaterThan(SQLiteDiskBundleTestingHooks.unwindAttemptCount, 0, "unwind path should run")
         XCTAssertEqual(vault.presentation, .firstRun)
         XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
+        let err = vault.setupError ?? ""
         XCTAssertTrue(
-            vault.setupError?.contains("could not roll back safely") == true,
+            err.localizedCaseInsensitiveContains("setup could not roll back safely"),
             "Expected standard manual-recovery copy after failed rollback; setupError=\(String(describing: vault.setupError))"
         )
+        XCTAssertTrue(
+            err.contains(dataFolder.path),
+            "Message should name the data folder; setupError=\(err)"
+        )
+        XCTAssertTrue(
+            err.localizedCaseInsensitiveContains("plaintext backup"),
+            "Expected backup path in manual recovery copy; setupError=\(err)"
+        )
         XCTAssertTrue(vault.testingIsAPILocked)
-        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
-        SQLiteDiskBundleTestingHooks.unwindFailure = nil
+
+        vault.advanceFirstRunToCodes()
+        XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
+
+        vault.goBackFromFirstRunConfirmToCodes()
+        XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
+
+        XCTAssertNotNil(try SetupManualRecoveryStore.loadReason())
+
+        let vaultRelaunch = makeVault()
+        vaultRelaunch.start()
+        await waitUntil {
+            vaultRelaunch.presentation == .firstRun && vaultRelaunch.setupRequiresManualRecoveryReason != nil
+        }
+        XCTAssertNotNil(vaultRelaunch.setupRequiresManualRecoveryReason)
+    }
+
+    /// **During swap:** first `moveBundle` step fails after moving main db, then unwind fails irrecoverably.
+    func testSwapBundleMoveUnwindFailureSurfacesManualRecoveryAndBlocksWizard() async throws {
+        _ = try installWALPlaintextDatabaseFixture(withPendingInsert: false)
+        try releaseWalFixtureConnection()
+
+        let dataFolder = tempRoot!
+
+        let vault = makeVault()
+        await startVaultForFirstRun(vault)
+        try seedPendingSetup(vault: vault)
+
+        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = 1
+        SQLiteDiskBundleTestingHooks.unwindFailure = NSError(
+            domain: "TestUnwind", code: 3, userInfo: [NSLocalizedDescriptionKey: "simulated unwind failure"]
+        )
+        vault.setupTOTPCode = try vault.testingCurrentSetupTOTPCode()
+        await vault.completeFirstRunAfterTOTP()
+        await waitUntil(timeout: 45) { vault.setupRequiresManualRecoveryReason != nil }
+
+        XCTAssertGreaterThan(SQLiteDiskBundleTestingHooks.unwindAttemptCount, 0, "unwind path should run")
+        XCTAssertEqual(vault.presentation, .firstRun)
+        XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
+        let err = vault.setupError ?? ""
+        XCTAssertTrue(
+            err.contains("partial file move then unwind failed"),
+            "Expected bundleMoveUnwindFailed user copy; setupError=\(err)"
+        )
+        XCTAssertTrue(
+            err.contains(dataFolder.path),
+            "Message should name the data folder; setupError=\(err)"
+        )
+        XCTAssertTrue(vault.testingIsAPILocked)
 
         vault.advanceFirstRunToCodes()
         XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)

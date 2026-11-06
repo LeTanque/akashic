@@ -5,6 +5,12 @@ import GRDB
 public enum SQLiteDiskBundleTestingHooks {
     /// When non-nil, `moveBundle` throws after exactly this many successful `moveItem` calls (1 = fail after main).
     public nonisolated(unsafe) static var moveBundleFailAfterNSuccessfulMoves: Int? = nil
+    /// When set, the first `N` **invocations** of `moveBundle` skip **`moveBundleFailAfterNSuccessfulMoves`** only
+    /// (`unwindFailure` still applies). Tests use this to let migration swap `moveBundle` calls succeed, then arm
+    /// simulated move failure for a later rollback restore.
+    public nonisolated(unsafe) static var moveBundleFailHooksIgnoreFirstInvocations: Int? = nil
+    /// Incremented once per `moveBundle` entry (reset in tests).
+    public nonisolated(unsafe) static var moveBundleInvocationCount: Int = 0
     /// When set, `unwindPartialBundleMoves` throws (simulates irrecoverable partial move).
     public nonisolated(unsafe) static var unwindFailure: Error?
     /// Incremented each time `unwindPartialBundleMoves` runs (package tests).
@@ -77,6 +83,13 @@ public enum SQLiteDiskBundle {
 
     /// Move main + any existing sidecars from `sourceMain` to `destMain` in one logical step: on failure, reverse completed moves.
     public static func moveBundle(from sourceMain: URL, to destMain: URL) throws {
+        SQLiteDiskBundleTestingHooks.moveBundleInvocationCount += 1
+        let invocation = SQLiteDiskBundleTestingHooks.moveBundleInvocationCount
+        let moveFailHooksActive: Bool = {
+            guard let skip = SQLiteDiskBundleTestingHooks.moveBundleFailHooksIgnoreFirstInvocations else { return true }
+            return invocation > skip
+        }()
+
         let pairs: [(URL, URL)] = [
             (sourceMain, destMain),
             (journalURL(main: sourceMain), journalURL(main: destMain)),
@@ -95,7 +108,10 @@ public enum SQLiteDiskBundle {
                 try fm.moveItem(at: src, to: dst)
                 completedMoves.append((src, dst))
                 moveCount += 1
-                if let failAfter = SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves, moveCount == failAfter {
+                if moveFailHooksActive,
+                   let failAfter = SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves,
+                   moveCount == failAfter
+                {
                     throw AkashicSQLiteBundleError.simulatedMoveFailure
                 }
             }
