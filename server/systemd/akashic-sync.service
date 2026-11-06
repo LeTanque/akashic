@@ -23,6 +23,13 @@ ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/akashic-sync
 LimitNOFILE=65535
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target

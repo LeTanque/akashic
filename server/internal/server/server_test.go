@@ -224,7 +224,10 @@ func TestTotpReplay(t *testing.T) {
 	_ = json.NewEncoder(&buf).Encode(body)
 	req, _ = http.NewRequest(http.MethodPost, base+"/v1/auth/login", &buf)
 	req.Header.Set("Content-Type", "application/json")
-	res, _ = client.Do(req)
+	res, errDo1 := client.Do(req)
+	if errDo1 != nil {
+		t.Fatalf("do: %v", errDo1)
+	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("replay: want 401 got %d", res.StatusCode)
@@ -245,7 +248,10 @@ func TestWrongTotp(t *testing.T) {
 	_ = json.NewEncoder(&buf).Encode(body)
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/auth/login", &buf)
 	req.Header.Set("Content-Type", "application/json")
-	res, _ := client.Do(req)
+	res, errDo2 := client.Do(req)
+	if errDo2 != nil {
+		t.Fatalf("do: %v", errDo2)
+	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("wrong totp: %d", res.StatusCode)
@@ -270,7 +276,10 @@ func TestDevicePendingApproveRevokeSessions(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodGet, base+"/v1/devices", nil)
 	req.Header.Set("Authorization", "Bearer "+access1)
-	res, _ := client.Do(req)
+	res, errDo3 := client.Do(req)
+	if errDo3 != nil {
+		t.Fatalf("do: %v", errDo3)
+	}
 	b, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
@@ -279,7 +288,10 @@ func TestDevicePendingApproveRevokeSessions(t *testing.T) {
 
 	req, _ = http.NewRequest(http.MethodPost, base+"/v1/devices/"+dev2.String()+"/approve", nil)
 	req.Header.Set("Authorization", "Bearer "+access1)
-	res, _ = client.Do(req)
+	res, errDo4 := client.Do(req)
+	if errDo4 != nil {
+		t.Fatalf("do: %v", errDo4)
+	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("approve: %d", res.StatusCode)
@@ -293,7 +305,10 @@ func TestDevicePendingApproveRevokeSessions(t *testing.T) {
 
 	req, _ = http.NewRequest(http.MethodPost, base+"/v1/devices/"+dev2.String()+"/revoke", nil)
 	req.Header.Set("Authorization", "Bearer "+access1)
-	res, _ = client.Do(req)
+	res, errDo5 := client.Do(req)
+	if errDo5 != nil {
+		t.Fatalf("do: %v", errDo5)
+	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("revoke: %d", res.StatusCode)
@@ -303,7 +318,10 @@ func TestDevicePendingApproveRevokeSessions(t *testing.T) {
 	_ = json.NewEncoder(&buf).Encode(map[string]any{"refresh_token": refresh2})
 	req, _ = http.NewRequest(http.MethodPost, base+"/v1/auth/refresh", &buf)
 	req.Header.Set("Content-Type", "application/json")
-	res, _ = client.Do(req)
+	res, errDo6 := client.Do(req)
+	if errDo6 != nil {
+		t.Fatalf("do: %v", errDo6)
+	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("refresh after revoke: want 401 got %d", res.StatusCode)
@@ -329,7 +347,10 @@ func TestRecoverApprovePublic(t *testing.T) {
 	_ = json.NewEncoder(&buf).Encode(body)
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/accounts/register", &buf)
 	req.Header.Set("Content-Type", "application/json")
-	res, _ := client.Do(req)
+	res, errDo7 := client.Do(req)
+	if errDo7 != nil {
+		t.Fatalf("do: %v", errDo7)
+	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusCreated {
 		t.Fatalf("register %d", res.StatusCode)
@@ -350,7 +371,10 @@ func TestRecoverApprovePublic(t *testing.T) {
 	})
 	req, _ = http.NewRequest(http.MethodPost, base+"/v1/devices/"+dev2.String()+"/recover-approve", &buf)
 	req.Header.Set("Content-Type", "application/json")
-	res, _ = client.Do(req)
+	res, errDo8 := client.Do(req)
+	if errDo8 != nil {
+		t.Fatalf("do: %v", errDo8)
+	}
 	res.Body.Close()
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("recover-approve: %d", res.StatusCode)
@@ -386,7 +410,10 @@ func TestPushIdempotentPullPlaintextOpaque(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPost, base+"/v1/sync/push", &buf)
 		req.Header.Set("Authorization", "Bearer "+access)
 		req.Header.Set("Content-Type", "application/json")
-		res, _ := client.Do(req)
+		res, errDo9 := client.Do(req)
+		if errDo9 != nil {
+			t.Fatalf("do: %v", errDo9)
+		}
 		return res
 	}
 	res := push()
@@ -414,7 +441,10 @@ func TestPushIdempotentPullPlaintextOpaque(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodGet, base+"/v1/sync/pull?since_seq=0&limit=10", nil)
 	req.Header.Set("Authorization", "Bearer "+access)
-	res, _ = client.Do(req)
+	res, errDo10 := client.Do(req)
+	if errDo10 != nil {
+		t.Fatalf("do: %v", errDo10)
+	}
 	b, _ = io.ReadAll(res.Body)
 	res.Body.Close()
 	var pull PullResponse
@@ -459,7 +489,10 @@ func TestLockout(t *testing.T) {
 		_ = json.NewEncoder(&buf).Encode(body)
 		req, _ := http.NewRequest(http.MethodPost, base+"/v1/auth/login", &buf)
 		req.Header.Set("Content-Type", "application/json")
-		res, _ := client.Do(req)
+		res, errDo11 := client.Do(req)
+		if errDo11 != nil {
+			t.Fatalf("do: %v", errDo11)
+		}
 		io.Copy(io.Discard, res.Body)
 		res.Body.Close()
 	}
@@ -471,7 +504,10 @@ func TestLockout(t *testing.T) {
 	_ = json.NewEncoder(&buf).Encode(body)
 	req, _ := http.NewRequest(http.MethodPost, base+"/v1/auth/login", &buf)
 	req.Header.Set("Content-Type", "application/json")
-	res, _ := client.Do(req)
+	res, errDo12 := client.Do(req)
+	if errDo12 != nil {
+		t.Fatalf("do: %v", errDo12)
+	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("lockout: want 429 got %d", res.StatusCode)
@@ -499,7 +535,10 @@ func TestPullPaginationHasMore(t *testing.T) {
 		req, _ := http.NewRequest(http.MethodPost, base+"/v1/sync/push", &buf)
 		req.Header.Set("Authorization", "Bearer "+access)
 		req.Header.Set("Content-Type", "application/json")
-		res, _ := client.Do(req)
+		res, errDo13 := client.Do(req)
+		if errDo13 != nil {
+			t.Fatalf("do: %v", errDo13)
+		}
 		io.Copy(io.Discard, res.Body)
 		res.Body.Close()
 		if res.StatusCode != http.StatusOK {
@@ -508,7 +547,10 @@ func TestPullPaginationHasMore(t *testing.T) {
 	}
 	req, _ := http.NewRequest(http.MethodGet, base+"/v1/sync/pull?since_seq=0&limit=1", nil)
 	req.Header.Set("Authorization", "Bearer "+access)
-	res, _ := client.Do(req)
+	res, errDo14 := client.Do(req)
+	if errDo14 != nil {
+		t.Fatalf("do: %v", errDo14)
+	}
 	b, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	var pull PullResponse

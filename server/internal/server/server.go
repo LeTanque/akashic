@@ -150,7 +150,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	params := argonParamsFromCfg(s.cfg)
 	salt, hash, err := authcrypto.HashAuthToken(authBytes, params)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 
@@ -160,7 +160,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 
@@ -172,23 +172,23 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		}
 		rsalt, rhash, err := authcrypto.HashAuthToken(recBytes, params)
 		if err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 		if err := s.st.SetRecoveryVerifier(ctx, accountID, rsalt, rhash); err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 	}
 
 	if err := s.st.CreateDevice(ctx, accountID, did.String(), req.DeviceName, req.DevicePlatform, store.DeviceApproved); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 
 	if len(req.EscrowPassword) > 0 && len(req.EscrowRecovery) > 0 {
 		if err := s.st.UpsertEscrow(ctx, accountID, []byte(req.EscrowPassword), []byte(req.EscrowRecovery)); err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 	}
@@ -213,7 +213,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	acc, err := s.st.AccountByUsername(ctx, req.Username)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	if acc == nil {
@@ -241,7 +241,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	used, err := s.st.TotpAlreadyUsed(ctx, acc.ID, step)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	if used {
@@ -264,13 +264,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	dev, err := s.st.DeviceByID(ctx, acc.ID, did.String())
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	if dev == nil {
 		n, err := s.st.CountDevices(ctx, acc.ID)
 		if err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 		status := store.DevicePending
@@ -278,7 +278,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			status = store.DeviceApproved
 		}
 		if err := s.st.CreateDevice(ctx, acc.ID, did.String(), req.DeviceName, req.DevicePlatform, status); err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 		dev, err = s.st.DeviceByID(ctx, acc.ID, did.String())
@@ -309,7 +309,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	tokens, err := s.issueTokens(ctx, acc.ID, did.String())
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, LoginResponse{
@@ -365,8 +365,16 @@ func totpMatchStep(code, secret string, now time.Time, skew uint) (int64, bool) 
 	}
 	counter := now.Unix() / int64(opts.Period)
 	code = strings.TrimSpace(code)
-	want := make([]byte, len(code))
-	copy(want, code)
+	// Reject non-6-digit inputs before CT compare (length mismatch short-circuits subtle.ConstantTimeCompare).
+	if len(code) != 6 {
+		return 0, false
+	}
+	for _, ch := range code {
+		if ch < '0' || ch > '9' {
+			return 0, false
+		}
+	}
+	want := []byte(code)
 	for delta := -int64(skew); delta <= int64(skew); delta++ {
 		step := counter + delta
 		t := time.Unix(step*int64(opts.Period), 0).UTC()
@@ -420,27 +428,32 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	h := authcrypto.HashRefreshToken(raw)
 	rec, err := s.st.SessionByRefreshHash(ctx, h)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	if rec == nil || rec.Revoked || time.Now().After(rec.RefreshExpiresAt) {
 		apiresponse.WriteError(w, http.StatusUnauthorized, ErrUnauthorized, "refresh")
 		return
 	}
+	dev, err := s.st.DeviceByID(ctx, rec.AccountID, rec.DeviceID)
+	if err != nil || dev == nil || dev.Status != store.DeviceApproved {
+		apiresponse.WriteError(w, http.StatusUnauthorized, ErrUnauthorized, "refresh")
+		return
+	}
 	newAccessRaw, err := authcrypto.RandomToken(32)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	newRefreshRaw, err := authcrypto.RandomToken(48)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	newAccessHash := authcrypto.HashRefreshToken(newAccessRaw)
 	newRefreshHash := authcrypto.HashRefreshToken(newRefreshRaw)
 	if err := s.st.RotateSessionTokens(ctx, rec.ID, newAccessHash, newRefreshHash, s.cfg.AccessTokenTTL, s.cfg.RefreshTokenTTL); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	now := time.Now()
@@ -474,7 +487,7 @@ func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, authCtx)
 		h := authcrypto.HashRefreshToken(raw)
 		sess, err := s.st.SessionByAccessHash(r.Context(), h)
 		if err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 		if sess == nil || sess.Revoked || time.Now().After(sess.AccessExpiresAt) {
@@ -483,7 +496,7 @@ func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, authCtx)
 		}
 		dev, err := s.st.DeviceByID(r.Context(), sess.AccountID, sess.DeviceID)
 		if err != nil {
-			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+			apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 			return
 		}
 		if dev == nil {
@@ -510,7 +523,7 @@ func (s *Server) withAuth(next func(http.ResponseWriter, *http.Request, authCtx)
 func (s *Server) handleListDevices(w http.ResponseWriter, r *http.Request, a authCtx) {
 	devs, err := s.st.ListDevices(r.Context(), a.AccountID)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	var out []DeviceInfo
@@ -558,7 +571,7 @@ func (s *Server) handleApproveDevice(w http.ResponseWriter, r *http.Request, a a
 		return
 	}
 	if err := s.st.UpdateDeviceStatus(r.Context(), a.AccountID, targetID, store.DeviceApproved); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -576,7 +589,7 @@ func (s *Server) handleRejectDevice(w http.ResponseWriter, r *http.Request, a au
 		return
 	}
 	if err := s.st.UpdateDeviceStatus(r.Context(), a.AccountID, targetID, store.DeviceRejected); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -594,7 +607,7 @@ func (s *Server) handleRevokeDevice(w http.ResponseWriter, r *http.Request, a au
 		return
 	}
 	if err := s.st.UpdateDeviceStatus(r.Context(), a.AccountID, targetID, store.DeviceRevoked); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	_ = s.st.RevokeSessionsForDevice(r.Context(), a.AccountID, targetID)
@@ -665,7 +678,7 @@ func (s *Server) handleRecoverApprovePublic(w http.ResponseWriter, r *http.Reque
 	}
 	used, err := s.st.TotpAlreadyUsed(ctx, acc.ID, step)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	if used {
@@ -681,7 +694,7 @@ func (s *Server) handleRecoverApprovePublic(w http.ResponseWriter, r *http.Reque
 	_ = s.st.PurgeOldTotpUses(ctx, 1000, time.Now().Unix())
 	_ = s.st.RecordSignIn(ctx, acc.ID, targetID, ip)
 	if err := s.st.UpdateDeviceStatus(ctx, acc.ID, targetID, store.DeviceApproved); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -698,7 +711,7 @@ func (s *Server) handlePutEscrow(w http.ResponseWriter, r *http.Request, a authC
 		return
 	}
 	if err := s.st.UpsertEscrow(r.Context(), a.AccountID, []byte(req.PasswordWrap), []byte(req.RecoveryWrap)); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -707,7 +720,7 @@ func (s *Server) handlePutEscrow(w http.ResponseWriter, r *http.Request, a authC
 func (s *Server) handleGetEscrow(w http.ResponseWriter, r *http.Request, a authCtx) {
 	pw, rw, err := s.st.GetEscrow(r.Context(), a.AccountID)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	if len(pw) == 0 && len(rw) == 0 {
@@ -766,7 +779,7 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request, a authCt
 	}
 	seq, inserted, err := s.st.PushBatch(r.Context(), a.AccountID, bid.String(), req.OriginDeviceID, hlc.WallMs, hlc.Counter, hlc.DeviceID.String(), ct)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, PushBatchResponse{Seq: seq, Duplicate: !inserted})
@@ -795,9 +808,15 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request, a authCt
 			limit = x
 		}
 	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 500 {
+		limit = 500
+	}
 	batches, err := s.st.ListBatchesSince(r.Context(), a.AccountID, since, limit+1)
 	if err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	hasMore := false
@@ -832,7 +851,7 @@ func (s *Server) handleSyncAck(w http.ResponseWriter, r *http.Request, a authCtx
 		return
 	}
 	if err := s.st.UpsertAck(r.Context(), a.AccountID, a.DeviceID, req.LastAckSeq); err != nil {
-		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, err.Error())
+		apiresponse.WriteError(w, http.StatusInternalServerError, ErrInternal, "internal error")
 		return
 	}
 	apiresponse.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
