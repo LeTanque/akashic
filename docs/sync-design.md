@@ -53,8 +53,9 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 ### TOTP (local second factor)
 
 - **RFC 6238**, HMAC-SHA1, **30 s** step, **6 digits**, standard `otpauth://totp/...` URI with QR during setup.
-- **Base32 in the URI:** The raw secret is 20 bytes; Base32 encoding without padding is often **31 characters**. Apple Passwords and several authenticators expect the `secret=` parameter to use **padded Base32** (length a multiple of 8, `=` padding per RFC 4648). Akashic pads the secret in **both** the `otpauth` URI and the value returned from setup so QR/manual entry match what the app verifies.
-- **Code entry:** Validation strips non-digits (including spaces and narrow spaces from AutoFill) and requires exactly six digits before comparing.
+- **Base32:** 20-byte secrets encode to **exactly 32** Base32 characters (160 bits ÷ 5 bits/symbol); the `secret=` query value is unpadded RFC 4648 Base32 (no `=` in the URI; some clients add padding when importing — our decoder strips `=`).
+- **Earlier defects (fixed):** Base32 used **`Int` shifts that overflowed** once more than ~8 bits accumulated (e.g. **19-byte** recovery material), and the encoder also **failed to mask consumed bits** after emitting each quintet—so even short strings like the RFC **`foobar`** vector could not round-trip. Recovery codes and any secret that shared that encoder were at risk; **TOTP** used a fresh 20-byte secret each setup, but QR/URI paths still depended on correct Base32.
+- **Code entry:** Only ASCII `0`–`9` count toward the code; formatting **whitespace** (incl. narrow/no-break spaces) is stripped. Other characters (letters, full-width digits) are rejected.
 - The secret is generated once at setup and stored in the sidecar **encrypted with the data key**, in a `LocalSecurityMetadata` shape a future server can mirror for enrollment.
 - Validation accepts clock skew **±1** period (~60 s window).
 - **Wizard:** Going **Back** from the confirm step returns to the QR step **without rotating** the pending setup secret (only “start over” from credentials regenerates keys).

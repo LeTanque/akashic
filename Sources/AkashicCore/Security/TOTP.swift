@@ -6,18 +6,29 @@ public enum TOTP {
     public static let defaultPeriod: UInt64 = 30
     public static let defaultDigits = 6
 
-    /// Strips AutoFill/Passwords formatting (spaces, groups, narrow spaces). Returns exactly `digits` ASCII digits, or nil.
+    private static let otpFormattingWhitespace: CharacterSet = {
+        var set = CharacterSet.whitespacesAndNewlines
+        // Common typographic / autofill spacing around OTP groups.
+        set.formUnion(CharacterSet(charactersIn: "\u{00A0}\u{2007}\u{2009}\u{202F}\u{2060}"))
+        return set
+    }()
+
+    /// Accepts ASCII `0`–`9` only, plus formatting whitespace (stripped). Rejects other Unicode digits and letters.
     public static func sanitizeEnteredCode(_ raw: String, digits: Int = defaultDigits) -> String? {
-        let filtered = raw.unicodeScalars.compactMap { scalar -> Character? in
-            if CharacterSet.decimalDigits.contains(scalar) {
-                return Character(scalar)
+        var out = [Character]()
+        out.reserveCapacity(digits)
+        for scalar in raw.unicodeScalars {
+            if (scalar.value >= 48 && scalar.value <= 57) {
+                out.append(Character(scalar))
+                continue
+            }
+            if otpFormattingWhitespace.contains(scalar) {
+                continue
             }
             return nil
         }
-        let s = String(filtered)
-        guard s.count == digits else { return nil }
-        guard s.allSatisfy({ $0 >= "0" && $0 <= "9" }) else { return nil }
-        return s
+        guard out.count == digits else { return nil }
+        return String(out)
     }
 
     public static func code(
