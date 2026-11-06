@@ -100,11 +100,6 @@ struct AkashicSettingsView: View {
 
             sectionTitle("MAIN WINDOW HEADER")
             toggleRow(
-                title: "Show system information",
-                subtitle: "Disk, memory, CPU, and agent usage in the header",
-                isOn: $settings.showSystemInformation
-            )
-            toggleRow(
                 title: "Show Akashic logo",
                 subtitle: "Wildstyle wordmark in the center header slot",
                 isOn: $settings.showAkashicLogo
