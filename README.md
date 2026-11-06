@@ -41,7 +41,7 @@ Do **not** commit that file, exports of personal todos, or dumps named like `see
 
 On **first launch with an empty database**, Akashic imports the bundled **demo** seed (`Sources/AkashicCore/Resources/akashic-seed-todos.json`). That seed is sample content only — replace it with your own local list in Application Support; never put personal todos in the bundled seed.
 
-Sync-oriented schema and merge rules are described in [docs/sync-design.md](docs/sync-design.md).
+Sync-oriented schema and merge rules are described in [docs/sync-design.md](docs/sync-design.md). The Phase 4 home relay HTTP API is specified in [docs/sync-protocol.md](docs/sync-protocol.md) (Go implementation under `server/`).
 
 Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar menu only when you intentionally want to load sample or your own exported JSON into the local DB. Both actions ask for confirmation because they replace your current todos.
 

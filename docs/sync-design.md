@@ -40,7 +40,7 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 
 1. **Encryption**: SQLCipher (or equivalent) for encrypted SQLite; unlock with password, TOTP, and biometrics where available.
 2. **Home server (e.g. Raspberry Pi)**: account directory, TOTP enrollment, **device registry** and approval (any already-approved device or recovery code can approve a new device).
-3. **Relay**: server stores **opaque** encrypted change batches (cannot read user data); devices exchange end-to-end encrypted deltas.
+3. **Relay**: server stores **opaque** encrypted change batches (cannot read user data); devices exchange end-to-end encrypted deltas. See [sync-protocol.md](sync-protocol.md) and `server/README.md`.
 4. **iPad app**: shares `AkashicCore`; same merge rules and schema.
 
 ## Manual verification (Phase 2 PR)
