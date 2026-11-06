@@ -76,7 +76,7 @@ struct AkashicFirstRunView: View {
                 Task { await vault.completeFirstRunAfterTOTP() }
             }
             Button("Back") {
-                vault.resetFirstRunWizard()
+                vault.goBackFromFirstRunConfirmToCodes()
             }
             .buttonStyle(.plain)
             .foregroundStyle(CyberpunkTheme.readableMutedCyan)

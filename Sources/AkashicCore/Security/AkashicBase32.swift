@@ -1,6 +1,10 @@
 import Foundation
 
-/// RFC 4648 base32 (no padding) encode/decode for TOTP secrets and recovery codes.
+/// RFC 4648 Base32 (alphabet A–Z2–7), no `=` padding in encoded output.
+///
+/// An earlier `Int`-based accumulator **overflowed** on left shifts for long inputs (e.g. 19-byte
+/// recovery material), producing short/incorrect strings and breaking round-trips. This
+/// implementation keeps a `UInt64` buffer and masks unused bits after each output quintet.
 public enum AkashicBase32 {
     private static let alphabet: [Character] = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
 
@@ -13,38 +17,47 @@ public enum AkashicBase32 {
     }()
 
     public static func encode(_ data: Data) -> String {
+        guard !data.isEmpty else { return "" }
+        var buffer: UInt64 = 0
         var bits = 0
-        var value = 0
         var output = [Character]()
+
         for byte in data {
-            value = (value << 8) | Int(byte)
+            buffer = (buffer << 8) | UInt64(byte)
             bits += 8
             while bits >= 5 {
                 bits -= 5
-                let idx = (value >> bits) & 31
+                let idx = Int((buffer >> bits) & 0x1F)
                 output.append(alphabet[idx])
+                buffer = bits > 0 ? (buffer & ((1 << bits) - 1)) : 0
             }
         }
         if bits > 0 {
-            let idx = (value << (5 - bits)) & 31
+            let idx = Int((buffer << (5 - bits)) & 0x1F)
             output.append(alphabet[idx])
         }
         return String(output)
     }
 
     public static func decode(_ string: String) throws -> Data {
-        let cleaned = string.uppercased().filter { !$0.isWhitespace }
+        var cleaned = string.uppercased().filter { !$0.isWhitespace }
+        while cleaned.last == "=" {
+            cleaned.removeLast()
+        }
         guard !cleaned.isEmpty else { throw AkashicCryptoError.invalidInput }
+
+        var buffer: UInt64 = 0
         var bits = 0
-        var value = 0
         var out = [UInt8]()
+
         for c in cleaned {
-            guard let idx = charToIndex[c] else { throw AkashicCryptoError.invalidInput }
-            value = (value << 5) | idx
+            guard let v = charToIndex[c] else { throw AkashicCryptoError.invalidInput }
+            buffer = (buffer << 5) | UInt64(v)
             bits += 5
-            if bits >= 8 {
+            while bits >= 8 {
                 bits -= 8
-                out.append(UInt8((value >> bits) & 0xff))
+                out.append(UInt8((buffer >> bits) & 0xFF))
+                buffer = bits > 0 ? (buffer & ((1 << bits) - 1)) : 0
             }
         }
         return Data(out)

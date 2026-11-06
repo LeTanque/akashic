@@ -114,4 +114,72 @@ final class Phase3SecurityTests: XCTestCase {
         let r = TodoAPIServer.lockedResponse()
         XCTAssertEqual(r.statusCode, .locked)
     }
+
+    func testTOTPCodeSanitizeAcceptsFormattingWhitespaceOnly() {
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("123456"), "123456")
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("123 456"), "123456")
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("12 34 56"), "123456")
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("123456\u{202f}"), "123456")
+        XCTAssertNil(TOTP.sanitizeEnteredCode("12345"))
+        XCTAssertNil(TOTP.sanitizeEnteredCode("1234567"))
+        // Arabic-Indic digit ١ (U+0661) — must not be treated as ASCII 1
+        XCTAssertNil(TOTP.sanitizeEnteredCode("\u{0661}23456"))
+    }
+
+    /// RFC 4648 §10 — fixed vector (no padding).
+    func testBase32RFCEncodeFoobar() {
+        XCTAssertEqual(AkashicBase32.encode(Data("foobar".utf8)), "MZXW6YTBOI")
+        XCTAssertEqual(try AkashicBase32.decode("MZXW6YTBOI"), Data("foobar".utf8))
+    }
+
+    /// 160 bits → exactly 32 Base32 symbols (TOTP secret length).
+    func testBase32TwentyByteZerosRoundTrip() throws {
+        let raw = Data(repeating: 0, count: 20)
+        let enc = AkashicBase32.encode(raw)
+        XCTAssertEqual(enc.count, 32)
+        XCTAssertEqual(enc, String(repeating: "A", count: 32))
+        XCTAssertEqual(try AkashicBase32.decode(enc), raw)
+    }
+
+    /// 152 bits → 31 Base32 symbols; prior `Int`-buffer encoder silently broke longer inputs.
+    func testBase32NineteenByteZerosRoundTrip() throws {
+        let raw = Data(repeating: 0, count: 19)
+        let enc = AkashicBase32.encode(raw)
+        XCTAssertEqual(enc.count, 31)
+        XCTAssertEqual(try AkashicBase32.decode(enc), raw)
+    }
+
+    func testBase32RandomTwentyByteRoundTrip() throws {
+        var rng: UInt64 = 0xC0FFEE_DEAD_BEEF
+        for _ in 0 ..< 32 {
+            var bytes = Data(count: 20)
+            for i in bytes.indices {
+                rng = rng &* 6364136223846793005 &+ 1442695040888963407
+                bytes[i] = UInt8(truncatingIfNeeded: rng >> 56)
+            }
+            let enc = AkashicBase32.encode(bytes)
+            XCTAssertEqual(enc.count, 32)
+            XCTAssertEqual(try AkashicBase32.decode(enc), bytes)
+        }
+    }
+
+    func testTOTPSecretInOtpauthQueryMatchesEncodedRaw() throws {
+        let (_, _, base32, uri) = try DataKeyManager.generateMetadata(username: "Frank", password: "password12")
+        XCTAssertEqual(base32.count, 32)
+        let items = try XCTUnwrap(URLComponents(string: uri)?.queryItems)
+        let secretParam = try XCTUnwrap(items.first { $0.name == "secret" }?.value)
+        XCTAssertEqual(
+            secretParam.removingPercentEncoding ?? secretParam,
+            base32
+        )
+    }
+
+    /// Independent vector: derive HOTP with same algorithm as `TOTP.code`, compare to a hand-computed RFC-style value.
+    func testTOTPIndependentSixDigitVector() {
+        let secret = Data("12345678901234567890".utf8)
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        let t = f.date(from: "2005-03-18T01:58:29Z")!
+        XCTAssertEqual(TOTP.code(secret: secret, date: t, digits: 6), "081804")
+    }
 }
