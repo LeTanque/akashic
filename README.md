@@ -65,7 +65,7 @@ Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar
 
 ## Embedded API (FlyingFox)
 
-While Akashic is running **unlocked**, an in-process HTTP server listens on **localhost only** (`localhost:4311`). It reads and writes the same encrypted SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database.
+While Akashic is running **unlocked**, an in-process HTTP server listens on **localhost only** (default **`localhost:4311`**). It reads and writes the same encrypted SQLite store as the UI through `TodoStore`, so the menu-bar UI refreshes after API mutations. There is no separate API process and no second database. Set **`AKASHIC_API_PORT`** to override the listen port (used by package tests so parallel runs do not contend on **4311**).
 
 When the app is **locked**, data routes return **HTTP 423 Locked** (see table below). `GET /health` still responds.
 
