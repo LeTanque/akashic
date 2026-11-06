@@ -35,14 +35,20 @@ public enum SQLiteDiskBundle {
         }
     }
 
-    /// `PRAGMA wal_checkpoint(TRUNCATE)`; throws if **busy != 0** (another connection prevented a complete checkpoint) or **log != 0** after truncate.
-    public static func requireTruncatingWalCheckpoint(_ db: Database) throws {
-        guard let row = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") else {
-            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "no row returned")
+    /// For **WAL** databases: run `PRAGMA wal_checkpoint(TRUNCATE)` and require `busy=0` and `log=0`.
+    /// For **DELETE/TRUNCATE/OFF** journals SQLite returns `(0,-1,-1)` — that is valid; we no-op.
+    public static func requireTruncatingWalCheckpointIfWAL(_ db: Database) throws {
+        guard let mode = try String.fetchOne(db, sql: "PRAGMA journal_mode") else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "PRAGMA journal_mode returned no row")
         }
-        // Columns: busy, log, checkpointed
-        let busy = row[0] as? Int64 ?? Int64(truncating: (row[0] as? NSNumber)?.int64Value ?? 0)
-        let logPages = row[1] as? Int64 ?? Int64(truncating: (row[1] as? NSNumber)?.int64Value ?? 0)
+        guard mode.lowercased() == "wal" else { return }
+
+        guard let row = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "PRAGMA wal_checkpoint returned no row")
+        }
+        // Column names: busy, log, checkpointed (SQLite 3)
+        let busy: Int64 = row["busy"]
+        let logPages: Int64 = row["log"]
         if busy != 0 {
             throw AkashicSQLiteBundleError.walCheckpointBusy
         }
@@ -75,9 +81,16 @@ public enum SQLiteDiskBundle {
                     throw AkashicSQLiteBundleError.simulatedMoveFailure
                 }
             }
-        } catch {
-            try unwindPartialBundleMoves(completedMoves)
-            throw error
+        } catch let original {
+            do {
+                try unwindPartialBundleMoves(completedMoves)
+            } catch let unwindErr {
+                throw AkashicSQLiteBundleError.bundleMoveUnwindFailed(
+                    originalDescription: String(describing: original),
+                    unwindDescription: unwindErr.localizedDescription
+                )
+            }
+            throw original
         }
     }
 
@@ -98,7 +111,7 @@ public enum SQLiteDiskBundle {
         config.label = "AkashicCheckpointPlain"
         let queue = try DatabaseQueue(path: main.path, configuration: config)
         try queue.write { db in
-            try requireTruncatingWalCheckpoint(db)
+            try requireTruncatingWalCheckpointIfWAL(db)
         }
         try queue.close()
     }
@@ -109,4 +122,5 @@ public enum AkashicSQLiteBundleError: Error, Equatable, Sendable {
     case walCheckpointIncomplete(remainingLogPages: Int64)
     case walCheckpointFailed(reason: String)
     case simulatedMoveFailure
+    case bundleMoveUnwindFailed(originalDescription: String, unwindDescription: String)
 }

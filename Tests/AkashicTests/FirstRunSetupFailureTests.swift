@@ -173,7 +173,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
             do {
                 let other = try DatabaseQueue(path: url.path)
                 try other.write { db in
-                    try SQLiteDiskBundle.requireTruncatingWalCheckpoint(db)
+                    try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
                 }
                 try other.close()
             } catch {
@@ -190,6 +190,20 @@ final class FirstRunSetupFailureTests: XCTestCase {
         try primary.close()
 
         XCTAssertEqual(checkpointError as? AkashicSQLiteBundleError, .walCheckpointBusy)
+    }
+
+    /// DELETE journal: `wal_checkpoint` returns `(0,-1,-1)` — must not be treated as incomplete.
+    func testNonWalJournalModeCheckpointIsNoOp() throws {
+        let url = try dbURL()
+        try SQLiteDiskBundle.removeAllIfPresent(main: url)
+        let q = try DatabaseQueue(path: url.path)
+        try q.write { db in
+            try db.execute(sql: "PRAGMA journal_mode = DELETE")
+        }
+        try q.write { db in
+            try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
+        }
+        try q.close()
     }
 
     // MARK: - Setup flow

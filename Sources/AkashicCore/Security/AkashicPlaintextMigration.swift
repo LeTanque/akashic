@@ -76,7 +76,7 @@ public enum AkashicPlaintextMigration {
         let before = try plainQueue.read { try countRows(in: $0) }
         // Merge WAL into the main file; abort if another writer leaves WAL busy or non-empty.
         try plainQueue.write { db in
-            try SQLiteDiskBundle.requireTruncatingWalCheckpoint(db)
+            try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
         }
         // Drop our reader so ATTACH below is the only connection on the plaintext file.
         // (Callers must also release any other open queues on `plaintextURL`.)
@@ -117,7 +117,7 @@ public enum AkashicPlaintextMigration {
         // Apply any pending GRDB migrations on the encrypted copy (usually no-op if source was current).
         try TodoDatabase.migrator.migrate(encQueue2)
         try encQueue2.write { db in
-            try SQLiteDiskBundle.requireTruncatingWalCheckpoint(db)
+            try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
         }
         try encQueue2.close()
     }
@@ -150,8 +150,9 @@ public enum AkashicPlaintextMigration {
                 try SQLiteDiskBundle.moveBundle(from: backupURL, to: livePlaintextURL)
             } catch let restoreError {
                 throw AkashicMigrationError.swapAndRestoreFailed(
-                    swapDescription: error.localizedDescription,
-                    restoreDescription: restoreError.localizedDescription
+                    backupPath: backupURL.path,
+                    swapDetail: String(describing: error),
+                    restoreDetail: restoreError.localizedDescription
                 )
             }
             throw error
@@ -163,5 +164,5 @@ public enum AkashicPlaintextMigration {
 public enum AkashicMigrationError: Error, Equatable, Sendable {
     case rowCountMismatch(expected: AkashicPlaintextMigration.TableCounts, actual: AkashicPlaintextMigration.TableCounts)
     case missingTempEncrypted
-    case swapAndRestoreFailed(swapDescription: String, restoreDescription: String)
+    case swapAndRestoreFailed(backupPath: String, swapDetail: String, restoreDetail: String)
 }

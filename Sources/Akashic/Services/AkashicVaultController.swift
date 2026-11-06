@@ -65,8 +65,6 @@ final class AkashicVaultController: ObservableObject {
 
     private static let biometricKey = "akashic.security.biometricUnlock"
     private static let autoLockKey = "akashic.security.autoLockIdleMinutes"
-    /// Fallback when the recovery flag file cannot be written (still blocks setup after relaunch).
-    private static let manualRecoveryDefaultsKey = "akashic.setup.manualRecoveryReason.v1"
 
     init(apiService: AkashicAPIService) {
         self.apiService = apiService
@@ -319,7 +317,8 @@ final class AkashicVaultController: ObservableObject {
                         result: .failure(cleanupError),
                         setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
                         setupError: &setupError,
-                        detail: "cleanup temp encrypt path: \(cleanupError.localizedDescription)"
+                        detail: "cleanup temp encrypt path: \(cleanupError.localizedDescription)",
+                        backupPlaintextPath: migrationPlaintextBackupURL?.path
                     )
                 }
                 if let backup = migrationPlaintextBackupURL {
@@ -327,12 +326,18 @@ final class AkashicVaultController: ObservableObject {
                         result: Result { try rollbackPlaintextMigration(liveDB: dbURL, backupURL: backup) },
                         setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
                         setupError: &setupError,
-                        detail: error.localizedDescription
+                        detail: error.localizedDescription,
+                        backupPlaintextPath: backup.path
                     )
                     migrationPlaintextBackupURL = nil
                 }
                 if setupRequiresManualRecoveryReason == nil {
-                    setupError = Self.migrationSetupErrorMessage(for: error)
+                    let msg = Self.migrationSetupErrorMessage(for: error)
+                    setupError = msg
+                    if Self.migrationFailureRequiresManualRecovery(error) {
+                        setupRequiresManualRecoveryReason = msg
+                        Self.persistManualRecoveryFlag(msg)
+                    }
                 }
                 return
             }
@@ -365,7 +370,8 @@ final class AkashicVaultController: ObservableObject {
                 result: rollback,
                 setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
                 setupError: &setupError,
-                detail: error.localizedDescription
+                detail: error.localizedDescription,
+                backupPlaintextPath: migrationPlaintextBackupURL?.path
             )
             if setupRequiresManualRecoveryReason == nil {
                 setupError =
@@ -388,7 +394,8 @@ final class AkashicVaultController: ObservableObject {
                 result: rollback,
                 setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
                 setupError: &setupError,
-                detail: error.localizedDescription
+                detail: error.localizedDescription,
+                backupPlaintextPath: migrationPlaintextBackupURL?.path
             )
             if setupRequiresManualRecoveryReason == nil {
                 setupError =
@@ -398,7 +405,6 @@ final class AkashicVaultController: ObservableObject {
         }
 
         try? SetupManualRecoveryStore.clear()
-        UserDefaults.standard.removeObject(forKey: Self.manualRecoveryDefaultsKey)
         setupRequiresManualRecoveryReason = nil
 
         pendingMetadata = nil
@@ -437,7 +443,39 @@ final class AkashicVaultController: ObservableObject {
     }
 
     private static func migrationSetupErrorMessage(for error: Error) -> String {
-        "Could not encrypt or replace your existing database: \(error.localizedDescription). Your original file was left unchanged."
+        if let bundle = error as? AkashicSQLiteBundleError {
+            switch bundle {
+            case .walCheckpointBusy:
+                return "Could not prepare your existing database for encryption: the database is busy (another app or window has it open). Close other connections and try again."
+            case let .walCheckpointIncomplete(remainingLogPages):
+                return "Could not prepare your existing database for encryption: WAL could not be fully checkpointed (\(remainingLogPages) log pages left). Close other connections and try again."
+            case let .walCheckpointFailed(reason):
+                return "Could not prepare your existing database for encryption: \(reason)"
+            case let .bundleMoveUnwindFailed(originalDescription, unwindDescription):
+                return "Could not encrypt or replace your existing database (partial file move then unwind failed). Original: \(originalDescription). Unwind: \(unwindDescription). Check the Akashic data folder."
+            case .simulatedMoveFailure:
+                return "Could not encrypt or replace your existing database: \(error.localizedDescription)"
+            }
+        }
+        if let mig = error as? AkashicMigrationError, case let .swapAndRestoreFailed(backupPath, swapDetail, restoreDetail) = mig {
+            return "Could not finish encrypting your database (swap failed). Plaintext backup may be at: \(backupPath). Swap: \(swapDetail). Restore attempt: \(restoreDetail)"
+        }
+        return "Could not encrypt or replace your existing database: \(error.localizedDescription)"
+    }
+
+    private static func migrationFailureRequiresManualRecovery(_ error: Error) -> Bool {
+        if let b = error as? AkashicSQLiteBundleError {
+            switch b {
+            case .bundleMoveUnwindFailed:
+                return true
+            case .walCheckpointBusy, .walCheckpointIncomplete, .walCheckpointFailed, .simulatedMoveFailure:
+                return false
+            }
+        }
+        if let m = error as? AkashicMigrationError, case .swapAndRestoreFailed = m {
+            return true
+        }
+        return false
     }
 
     /// Creates `akashic.sqlite` (and sidecars) in one shot; removes partial files on failure.
@@ -458,14 +496,16 @@ final class AkashicVaultController: ObservableObject {
         result: Result<Void, Error>,
         setupRequiresManualRecoveryReason: inout String?,
         setupError: inout String?,
-        detail: String
+        detail: String,
+        backupPlaintextPath: String? = nil
     ) {
         switch result {
         case .success:
             break
         case .failure(let rollbackError):
+            let backupNote = backupPlaintextPath.map { " Plaintext backup (if present): \($0)." } ?? ""
             let message =
-                "Setup could not roll back safely after: \(detail). Rollback error: \(rollbackError.localizedDescription). Check the Akashic data folder; you may need to restore from backup before retrying."
+                "Setup could not roll back safely after: \(detail). Rollback error: \(rollbackError.localizedDescription).\(backupNote) Check the Akashic data folder; remove akashic-setup-manual-recovery.txt only after reconciling files or restoring from backup."
             setupRequiresManualRecoveryReason = message
             setupError = message
             persistManualRecoveryFlag(message)
@@ -476,12 +516,6 @@ final class AkashicVaultController: ObservableObject {
         if let fileReason = try? SetupManualRecoveryStore.loadReason(), !fileReason.isEmpty {
             setupRequiresManualRecoveryReason = fileReason
             setupError = fileReason
-            return
-        }
-        if let defReason = UserDefaults.standard.string(forKey: Self.manualRecoveryDefaultsKey),
-           !defReason.isEmpty {
-            setupRequiresManualRecoveryReason = defReason
-            setupError = defReason
         }
     }
 
@@ -491,20 +525,14 @@ final class AkashicVaultController: ObservableObject {
             setupRequiresManualRecoveryReason = fileReason
             return fileReason
         }
-        if let defReason = UserDefaults.standard.string(forKey: Self.manualRecoveryDefaultsKey),
-           !defReason.isEmpty {
-            setupRequiresManualRecoveryReason = defReason
-            return defReason
-        }
         return nil
     }
 
     private static func persistManualRecoveryFlag(_ message: String) {
         do {
             try SetupManualRecoveryStore.saveReason(message)
-            UserDefaults.standard.removeObject(forKey: manualRecoveryDefaultsKey)
         } catch {
-            UserDefaults.standard.set(message, forKey: manualRecoveryDefaultsKey)
+            // In-memory latch still blocks this session; relaunch cannot see the flag without disk write.
         }
     }
 
