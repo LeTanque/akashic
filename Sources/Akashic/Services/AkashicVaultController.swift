@@ -65,6 +65,8 @@ final class AkashicVaultController: ObservableObject {
 
     private static let biometricKey = "akashic.security.biometricUnlock"
     private static let autoLockKey = "akashic.security.autoLockIdleMinutes"
+    /// Fallback when the recovery flag file cannot be written (still blocks setup after relaunch).
+    private static let manualRecoveryDefaultsKey = "akashic.setup.manualRecoveryReason.v1"
 
     init(apiService: AkashicAPIService) {
         self.apiService = apiService
@@ -74,11 +76,24 @@ final class AkashicVaultController: ObservableObject {
         } else {
             autoLockIdleMinutes = 15
         }
+        refreshManualRecoveryFromDisk()
     }
 
     /// Package tests: verify localhost API stays locked during failed setup.
     internal var testingIsAPILocked: Bool {
         apiService.isLocked
+    }
+
+    /// Re-reads manual recovery from disk / defaults (e.g. after relaunch in tests).
+    internal func testingRefreshManualRecoveryFromDisk() {
+        refreshManualRecoveryFromDisk()
+    }
+
+    /// Package tests: persist manual recovery as after a failed rollback.
+    internal func testingArmManualRecoveryForTests(_ message: String) {
+        setupRequiresManualRecoveryReason = message
+        setupError = message
+        Self.persistManualRecoveryFlag(message)
     }
 
     func start() {
@@ -92,6 +107,11 @@ final class AkashicVaultController: ObservableObject {
     }
 
     private func evaluateVaultState() async {
+        refreshManualRecoveryFromDisk()
+        if setupRequiresManualRecoveryReason != nil {
+            presentation = .firstRun
+            return
+        }
         do {
             let dbURL = try AkashicPaths.databaseURL()
             if let metadata = try LocalSecurityMetadataStore.load() {
@@ -125,19 +145,22 @@ final class AkashicVaultController: ObservableObject {
     }
 
     func resetFirstRunWizard() {
+        if setupRequiresManualRecoveryReason != nil { return }
         firstRunStep = .credentials
         setupOtpauthURI = ""
         setupRecoveryDisplay = ""
         setupTOTPCode = ""
-        setupRequiresManualRecoveryReason = nil
         pendingMetadata = nil
         pendingDataKey = nil
     }
 
     /// Step 1 → 2: validate credentials and generate recovery code + TOTP secret (shown once).
     func advanceFirstRunToCodes() {
+        if let block = blockedByManualRecoveryMessage() {
+            setupError = block
+            return
+        }
         setupError = nil
-        setupRequiresManualRecoveryReason = nil
         let trimmedUser = setupUsername.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedUser.isEmpty else {
             setupError = "Username is required."
@@ -178,16 +201,23 @@ final class AkashicVaultController: ObservableObject {
     }
 
     func advanceFirstRunToConfirm() {
+        if let block = blockedByManualRecoveryMessage() {
+            setupError = block
+            return
+        }
         setupError = nil
         firstRunStep = .confirm
     }
 
     /// Confirm step → QR step without regenerating `pendingMetadata` / TOTP secret (unlike `resetFirstRunWizard()`).
     func goBackFromFirstRunConfirmToCodes() {
+        if let block = blockedByManualRecoveryMessage() {
+            setupError = block
+            return
+        }
         firstRunStep = .codes
         setupTOTPCode = ""
         setupError = nil
-        setupRequiresManualRecoveryReason = nil
     }
 
     /// Used by package tests to compute the expected TOTP for the pending setup secrets.
@@ -207,11 +237,10 @@ final class AkashicVaultController: ObservableObject {
         defer { isCompletingFirstRun = false }
 
         setupError = nil
-        if setupRequiresManualRecoveryReason != nil {
-            setupError = setupRequiresManualRecoveryReason
+        if let block = blockedByManualRecoveryMessage() {
+            setupError = block
             return
         }
-        setupRequiresManualRecoveryReason = nil
         guard let metadata = pendingMetadata, let dataKey = pendingDataKey else {
             setupError = "Setup expired; go back and regenerate codes."
             return
@@ -285,7 +314,14 @@ final class AkashicVaultController: ObservableObject {
             } catch {
                 do {
                     try SQLiteDiskBundle.removeAllIfPresent(main: tmp)
-                } catch { _ in }
+                } catch let cleanupError {
+                    Self.handleManualRecoveryIfNeeded(
+                        result: .failure(cleanupError),
+                        setupRequiresManualRecoveryReason: &setupRequiresManualRecoveryReason,
+                        setupError: &setupError,
+                        detail: "cleanup temp encrypt path: \(cleanupError.localizedDescription)"
+                    )
+                }
                 if let backup = migrationPlaintextBackupURL {
                     Self.handleManualRecoveryIfNeeded(
                         result: Result { try rollbackPlaintextMigration(liveDB: dbURL, backupURL: backup) },
@@ -361,6 +397,10 @@ final class AkashicVaultController: ObservableObject {
             return
         }
 
+        try? SetupManualRecoveryStore.clear()
+        UserDefaults.standard.removeObject(forKey: Self.manualRecoveryDefaultsKey)
+        setupRequiresManualRecoveryReason = nil
+
         pendingMetadata = nil
         pendingDataKey = nil
     }
@@ -424,9 +464,47 @@ final class AkashicVaultController: ObservableObject {
         case .success:
             break
         case .failure(let rollbackError):
-            setupRequiresManualRecoveryReason =
+            let message =
                 "Setup could not roll back safely after: \(detail). Rollback error: \(rollbackError.localizedDescription). Check the Akashic data folder; you may need to restore from backup before retrying."
-            setupError = setupRequiresManualRecoveryReason
+            setupRequiresManualRecoveryReason = message
+            setupError = message
+            persistManualRecoveryFlag(message)
+        }
+    }
+
+    private func refreshManualRecoveryFromDisk() {
+        if let fileReason = try? SetupManualRecoveryStore.loadReason(), !fileReason.isEmpty {
+            setupRequiresManualRecoveryReason = fileReason
+            setupError = fileReason
+            return
+        }
+        if let defReason = UserDefaults.standard.string(forKey: Self.manualRecoveryDefaultsKey),
+           !defReason.isEmpty {
+            setupRequiresManualRecoveryReason = defReason
+            setupError = defReason
+        }
+    }
+
+    private func blockedByManualRecoveryMessage() -> String? {
+        if let r = setupRequiresManualRecoveryReason, !r.isEmpty { return r }
+        if let fileReason = try? SetupManualRecoveryStore.loadReason(), !fileReason.isEmpty {
+            setupRequiresManualRecoveryReason = fileReason
+            return fileReason
+        }
+        if let defReason = UserDefaults.standard.string(forKey: Self.manualRecoveryDefaultsKey),
+           !defReason.isEmpty {
+            setupRequiresManualRecoveryReason = defReason
+            return defReason
+        }
+        return nil
+    }
+
+    private static func persistManualRecoveryFlag(_ message: String) {
+        do {
+            try SetupManualRecoveryStore.saveReason(message)
+            UserDefaults.standard.removeObject(forKey: manualRecoveryDefaultsKey)
+        } catch {
+            UserDefaults.standard.set(message, forKey: manualRecoveryDefaultsKey)
         }
     }
 

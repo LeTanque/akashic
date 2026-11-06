@@ -3,63 +3,110 @@ import GRDB
 
 /// Test-only (package tests).
 public enum SQLiteDiskBundleTestingHooks {
-    public nonisolated(unsafe) static var moveBundleFailure: Error?
+    /// When non-nil, `moveBundle` throws after exactly this many successful `moveItem` calls (1 = fail after main).
+    public nonisolated(unsafe) static var moveBundleFailAfterNSuccessfulMoves: Int? = nil
 }
 
-/// Paths for a single SQLite "database file" which may include `-wal` and `-shm` sidecars.
+/// Paths for a single SQLite database path `*.sqlite`: sidecars are **`path-wal`**, **`path-shm`**, **`path-journal`** (not path-extension swaps).
 public enum SQLiteDiskBundle {
-    public static func journalURL(forMainDB main: URL) -> URL {
-        main.deletingPathExtension().appendingPathExtension("sqlite-journal")
+    public static func journalURL(main: URL) -> URL {
+        URL(fileURLWithPath: main.path + "-journal", isDirectory: false)
     }
 
-    public static func walURL(forMainDB main: URL) -> URL {
-        main.deletingPathExtension().appendingPathExtension("sqlite-wal")
+    public static func walURL(main: URL) -> URL {
+        URL(fileURLWithPath: main.path + "-wal", isDirectory: false)
     }
 
-    public static func shmURL(forMainDB main: URL) -> URL {
-        main.deletingPathExtension().appendingPathExtension("sqlite-shm")
+    public static func shmURL(main: URL) -> URL {
+        URL(fileURLWithPath: main.path + "-shm", isDirectory: false)
     }
 
-    /// Files that may exist alongside `main` for rollback / cleanup.
-    public static func possibleSidecarURLs(main: URL) -> [URL] {
-        [journalURL(forMainDB: main), walURL(forMainDB: main), shmURL(forMainDB: main)]
+    public static func sidecarURLs(main: URL) -> [URL] {
+        [journalURL(main: main), walURL(main: main), shmURL(main: main)]
+    }
+
+    public static func allRelatedURLs(main: URL) -> [URL] {
+        [main] + sidecarURLs(main: main)
     }
 
     public static func removeAllIfPresent(main: URL) throws {
-        let urls = [main] + possibleSidecarURLs(main: main)
-        for u in urls where FileManager.default.fileExists(atPath: u.path) {
+        for u in allRelatedURLs(main: main) where FileManager.default.fileExists(atPath: u.path) {
             try FileManager.default.removeItem(at: u)
         }
     }
 
-    /// Move main DB and any existing sidecars; does not create missing sidecars.
-    public static func moveBundle(from sourceMain: URL, to destMain: URL) throws {
-        if let err = SQLiteDiskBundleTestingHooks.moveBundleFailure {
-            throw err
+    /// `PRAGMA wal_checkpoint(TRUNCATE)`; throws if **busy != 0** (another connection prevented a complete checkpoint) or **log != 0** after truncate.
+    public static func requireTruncatingWalCheckpoint(_ db: Database) throws {
+        guard let row = try Row.fetchOne(db, sql: "PRAGMA wal_checkpoint(TRUNCATE)") else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "no row returned")
         }
-        let pairs: [(URL, URL)] = [
-            (sourceMain, destMain),
-            (journalURL(forMainDB: sourceMain), journalURL(forMainDB: destMain)),
-            (walURL(forMainDB: sourceMain), walURL(forMainDB: destMain)),
-            (shmURL(forMainDB: sourceMain), shmURL(forMainDB: destMain)),
-        ]
-        for (src, dst) in pairs {
-            guard FileManager.default.fileExists(atPath: src.path) else { continue }
-            if FileManager.default.fileExists(atPath: dst.path) {
-                try FileManager.default.removeItem(at: dst)
-            }
-            try FileManager.default.moveItem(at: src, to: dst)
+        // Columns: busy, log, checkpointed
+        let busy = row[0] as? Int64 ?? Int64(truncating: (row[0] as? NSNumber)?.int64Value ?? 0)
+        let logPages = row[1] as? Int64 ?? Int64(truncating: (row[1] as? NSNumber)?.int64Value ?? 0)
+        if busy != 0 {
+            throw AkashicSQLiteBundleError.walCheckpointBusy
+        }
+        if logPages != 0 {
+            throw AkashicSQLiteBundleError.walCheckpointIncomplete(remainingLogPages: logPages)
         }
     }
 
-    /// Checkpoint WAL into the main file and close, so only the `-wal` file needs moving (often empty/absent).
+    /// Move main + any existing sidecars from `sourceMain` to `destMain` in one logical step: on failure, reverse completed moves.
+    public static func moveBundle(from sourceMain: URL, to destMain: URL) throws {
+        let pairs: [(URL, URL)] = [
+            (sourceMain, destMain),
+            (journalURL(main: sourceMain), journalURL(main: destMain)),
+            (walURL(main: sourceMain), walURL(main: destMain)),
+            (shmURL(main: sourceMain), shmURL(main: destMain)),
+        ]
+        var completedMoves: [(src: URL, dst: URL)] = []
+        let fm = FileManager.default
+        var moveCount = 0
+        do {
+            for (src, dst) in pairs {
+                guard fm.fileExists(atPath: src.path) else { continue }
+                if fm.fileExists(atPath: dst.path) {
+                    try fm.removeItem(at: dst)
+                }
+                try fm.moveItem(at: src, to: dst)
+                completedMoves.append((src, dst))
+                moveCount += 1
+                if let failAfter = SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves, moveCount == failAfter {
+                    throw AkashicSQLiteBundleError.simulatedMoveFailure
+                }
+            }
+        } catch {
+            try unwindPartialBundleMoves(completedMoves)
+            throw error
+        }
+    }
+
+    private static func unwindPartialBundleMoves(_ completedMoves: [(src: URL, dst: URL)]) throws {
+        let fm = FileManager.default
+        for pair in completedMoves.reversed() {
+            guard fm.fileExists(atPath: pair.dst.path) else { continue }
+            if fm.fileExists(atPath: pair.src.path) {
+                try fm.removeItem(at: pair.src)
+            }
+            try fm.moveItem(at: pair.dst, to: pair.src)
+        }
+    }
+
+    /// Opens the DB, truncates WAL into the main file, verifies busy/log, then closes.
     public static func checkpointWALAndClosePlainDatabase(at main: URL) throws {
         var config = Configuration()
         config.label = "AkashicCheckpointPlain"
         let queue = try DatabaseQueue(path: main.path, configuration: config)
         try queue.write { db in
-            try db.execute(sql: "PRAGMA wal_checkpoint(TRUNCATE)")
+            try requireTruncatingWalCheckpoint(db)
         }
         try queue.close()
     }
+}
+
+public enum AkashicSQLiteBundleError: Error, Equatable, Sendable {
+    case walCheckpointBusy
+    case walCheckpointIncomplete(remainingLogPages: Int64)
+    case walCheckpointFailed(reason: String)
+    case simulatedMoveFailure
 }

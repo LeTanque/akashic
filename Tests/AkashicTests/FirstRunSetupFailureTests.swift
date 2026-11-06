@@ -43,7 +43,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         TodoDatabaseTestingHooks.createEncryptedEmptyFailure = nil
         TodoDatabaseTestingHooks.openEncryptedFailure = nil
         TodoDatabaseTestingHooks.openEncryptedFailOnce = nil
-        SQLiteDiskBundleTestingHooks.moveBundleFailure = nil
+        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
     }
 
     private func makeVault() -> AkashicVaultController {
@@ -70,7 +70,8 @@ final class FirstRunSetupFailureTests: XCTestCase {
     }
 
     private func walURL() throws -> URL {
-        try dbURL().deletingPathExtension().appendingPathExtension("sqlite-wal")
+        let u = try dbURL()
+        return URL(fileURLWithPath: u.path + "-wal", isDirectory: false)
     }
 
     /// Plain DB with WAL journal (real sidecar files on disk).
@@ -124,6 +125,74 @@ final class FirstRunSetupFailureTests: XCTestCase {
         }
         XCTFail("Condition not met before timeout (\(timeout)s)", file: file, line: line)
     }
+
+    // MARK: - Path / bundle semantics
+
+    func testSQLiteSidecarPathsAppendSuffixNotExtensionSwap() throws {
+        let base = URL(fileURLWithPath: "/tmp/vault/akashic.sqlite", isDirectory: false)
+        XCTAssertEqual(SQLiteDiskBundle.journalURL(main: base).path, base.path + "-journal")
+        XCTAssertEqual(SQLiteDiskBundle.walURL(main: base).path, base.path + "-wal")
+        XCTAssertEqual(SQLiteDiskBundle.shmURL(main: base).path, base.path + "-shm")
+
+        let backup = URL(fileURLWithPath: "/tmp/vault/akashic.sqlite.plaintext-backup-ts", isDirectory: false)
+        XCTAssertEqual(SQLiteDiskBundle.walURL(main: backup).path, backup.path + "-wal")
+    }
+
+    func testMoveBundlePartialFailureRestoresSource() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("bundle-move-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let srcMain = dir.appendingPathComponent("src.sqlite")
+        let dstMain = dir.appendingPathComponent("dst.sqlite")
+        try Data("sqlite".utf8).write(to: srcMain)
+        let srcWal = SQLiteDiskBundle.walURL(main: srcMain)
+        try Data("wal".utf8).write(to: srcWal)
+
+        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = 2
+        XCTAssertThrowsError(try SQLiteDiskBundle.moveBundle(from: srcMain, to: dstMain)) { err in
+            XCTAssertEqual(err as? AkashicSQLiteBundleError, .simulatedMoveFailure)
+        }
+        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: srcMain.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: srcWal.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dstMain.path))
+    }
+
+    func testWalCheckpointBusyWithConcurrentWriterLock() throws {
+        let url = try dbURL()
+        try SQLiteDiskBundle.removeAllIfPresent(main: url)
+
+        let primary = try DatabaseQueue(path: url.path)
+        try primary.write { db in
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        }
+
+        let checkpointDone = expectation(description: "checkpoint")
+        var checkpointError: Error?
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let other = try DatabaseQueue(path: url.path)
+                try other.write { db in
+                    try SQLiteDiskBundle.requireTruncatingWalCheckpoint(db)
+                }
+                try other.close()
+            } catch {
+                checkpointError = error
+            }
+            checkpointDone.fulfill()
+        }
+
+        try primary.write { db in
+            try db.execute(sql: "BEGIN IMMEDIATE")
+            wait(for: [checkpointDone], timeout: 5)
+            try db.execute(sql: "ROLLBACK")
+        }
+        try primary.close()
+
+        XCTAssertEqual(checkpointError as? AkashicSQLiteBundleError, .walCheckpointBusy)
+    }
+
+    // MARK: - Setup flow
 
     func testWrongTOTPKeepsIncompleteAndAPILocked() async throws {
         let vault = makeVault()
@@ -254,20 +323,18 @@ final class FirstRunSetupFailureTests: XCTestCase {
         )
     }
 
-    func testRollbackFailureSurfacesManualRecovery() async throws {
-        try installPlaintextDatabaseFixture()
+    func testRollbackFailureSurfacesManualRecoveryAndBlocksWizard() async throws {
+        _ = try installWALPlaintextDatabaseFixture(withPendingInsert: false)
 
         let vault = makeVault()
         try seedPendingSetup(vault: vault)
-        let good = try vault.testingCurrentSetupTOTPCode()
 
         TodoDatabaseTestingHooks.openEncryptedFailOnce = NSError(
             domain: "TestOpenOnce", code: 9, userInfo: [NSLocalizedDescriptionKey: "fail once"]
         )
-        SQLiteDiskBundleTestingHooks.moveBundleFailure = NSError(
-            domain: "TestMove", code: 8, userInfo: [NSLocalizedDescriptionKey: "cannot restore plaintext"]
-        )
-        vault.setupTOTPCode = good
+        // Fail mid-bundle restore after plaintext backup includes `-wal` (first move = main, second = wal).
+        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = 2
+        vault.setupTOTPCode = try vault.testingCurrentSetupTOTPCode()
         Task { await vault.completeFirstRunAfterTOTP() }
         await waitUntil(timeout: 45) { vault.setupRequiresManualRecoveryReason != nil }
 
@@ -275,16 +342,26 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
         XCTAssertTrue(vault.setupError?.contains("could not roll back safely") == true)
         XCTAssertTrue(vault.testingIsAPILocked)
+        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
+
+        vault.advanceFirstRunToCodes()
+        XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
+
+        vault.goBackFromFirstRunConfirmToCodes()
+        XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
+
+        XCTAssertNotNil(try SetupManualRecoveryStore.loadReason())
     }
 
-    // MARK: - Helpers (non-WAL)
+    func testManualRecoveryPersistsAcrossNewController() async throws {
+        let vault = makeVault()
+        vault.testingArmManualRecoveryForTests("test disk hazard")
 
-    /// Seed `akashic.sqlite` with a plain (non-SQLCipher) database file.
-    private func installPlaintextDatabaseFixture() throws {
-        let url = try dbURL()
-        try SQLiteDiskBundle.removeAllIfPresent(main: url)
-        _ = try TodoDatabase.openPlain(at: url)
-        XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: url))
+        let vault2 = makeVault()
+        vault2.testingRefreshManualRecoveryFromDisk()
+
+        XCTAssertEqual(vault2.setupRequiresManualRecoveryReason, "test disk hazard")
+        XCTAssertEqual(vault2.setupError, "test disk hazard")
     }
 
     func testCreateEmptyDBFailureDoesNotWriteArtifacts() async throws {
@@ -302,5 +379,15 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertTrue(vault.setupError?.contains("Could not create the encrypted database") == true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: try dbURL().path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: try securityURL().path))
+    }
+
+    // MARK: - Helpers (non-WAL)
+
+    /// Seed `akashic.sqlite` with a plain (non-SQLCipher) database file.
+    private func installPlaintextDatabaseFixture() throws {
+        let url = try dbURL()
+        try SQLiteDiskBundle.removeAllIfPresent(main: url)
+        _ = try TodoDatabase.openPlain(at: url)
+        XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: url))
     }
 }

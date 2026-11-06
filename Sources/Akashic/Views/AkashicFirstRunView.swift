@@ -36,9 +36,11 @@ struct AkashicFirstRunView: View {
             CyberField(title: "USERNAME", text: $vault.setupUsername, contentType: .username)
             CyberSecureField(title: "PASSWORD (min 8)", text: $vault.setupPassword, contentType: .password)
             CyberSecureField(title: "CONFIRM PASSWORD", text: $vault.setupConfirmPassword, contentType: .password)
-            CyberButton(title: "CONTINUE") {
-                vault.advanceFirstRunToCodes()
-            }
+            CyberButton(
+                title: "CONTINUE",
+                action: { vault.advanceFirstRunToCodes() },
+                isEnabled: vault.setupRequiresManualRecoveryReason == nil
+            )
         }
     }
 
@@ -60,9 +62,11 @@ struct AkashicFirstRunView: View {
                 AkashicQRImageView(payload: vault.setupOtpauthURI)
             }
 
-            CyberButton(title: "I SAVED THESE · CONTINUE") {
-                vault.advanceFirstRunToConfirm()
-            }
+            CyberButton(
+                title: "I SAVED THESE · CONTINUE",
+                action: { vault.advanceFirstRunToConfirm() },
+                isEnabled: vault.setupRequiresManualRecoveryReason == nil
+            )
         }
     }
 
@@ -75,14 +79,14 @@ struct AkashicFirstRunView: View {
             CyberButton(
                 title: vault.isCompletingFirstRun ? "FINISHING…" : "FINISH SETUP",
                 action: { Task { await vault.completeFirstRunAfterTOTP() } },
-                isEnabled: !vault.isCompletingFirstRun
+                isEnabled: !vault.isCompletingFirstRun && vault.setupRequiresManualRecoveryReason == nil
             )
             Button("Back") {
                 vault.goBackFromFirstRunConfirmToCodes()
             }
             .buttonStyle(.plain)
             .foregroundStyle(CyberpunkTheme.readableMutedCyan)
-            .disabled(vault.isCompletingFirstRun)
+            .disabled(vault.isCompletingFirstRun || vault.setupRequiresManualRecoveryReason != nil)
         }
     }
 }
