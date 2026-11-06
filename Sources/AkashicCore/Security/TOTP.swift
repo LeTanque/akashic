@@ -6,6 +6,20 @@ public enum TOTP {
     public static let defaultPeriod: UInt64 = 30
     public static let defaultDigits = 6
 
+    /// Strips AutoFill/Passwords formatting (spaces, groups, narrow spaces). Returns exactly `digits` ASCII digits, or nil.
+    public static func sanitizeEnteredCode(_ raw: String, digits: Int = defaultDigits) -> String? {
+        let filtered = raw.unicodeScalars.compactMap { scalar -> Character? in
+            if CharacterSet.decimalDigits.contains(scalar) {
+                return Character(scalar)
+            }
+            return nil
+        }
+        let s = String(filtered)
+        guard s.count == digits else { return nil }
+        guard s.allSatisfy({ $0 >= "0" && $0 <= "9" }) else { return nil }
+        return s
+    }
+
     public static func code(
         secret: Data,
         date: Date = Date(),
@@ -26,8 +40,7 @@ public enum TOTP {
         digits: Int = defaultDigits,
         allowedDrift: Int = 1
     ) -> Bool {
-        let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.count == digits, normalized.allSatisfy(\.isNumber) else { return false }
+        guard let normalized = sanitizeEnteredCode(code, digits: digits) else { return false }
         let base = UInt64(floor((date.timeIntervalSince1970) / TimeInterval(period)))
         for delta in -allowedDrift ... allowedDrift {
             let ctr = Int64(base) + Int64(delta)

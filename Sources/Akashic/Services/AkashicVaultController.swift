@@ -173,6 +173,13 @@ final class AkashicVaultController: ObservableObject {
         firstRunStep = .confirm
     }
 
+    /// Confirm step → QR step without regenerating `pendingMetadata` / TOTP secret (unlike `resetFirstRunWizard()`).
+    func goBackFromFirstRunConfirmToCodes() {
+        firstRunStep = .codes
+        setupTOTPCode = ""
+        setupError = nil
+    }
+
     /// Step 3: confirm TOTP, persist metadata, migrate plaintext if needed, open DB.
     func completeFirstRunAfterTOTP() async {
         setupError = nil
@@ -182,7 +189,11 @@ final class AkashicVaultController: ObservableObject {
         }
         do {
             let totpSecret = try DataKeyManager.openTOTPSecret(metadata: metadata, dataKey: dataKey)
-            guard TOTP.validate(secret: totpSecret, code: setupTOTPCode) else {
+            guard let normalizedTOTP = TOTP.sanitizeEnteredCode(setupTOTPCode) else {
+                setupError = "Enter a 6-digit code (digits only, or from AutoFill)."
+                return
+            }
+            guard TOTP.validate(secret: totpSecret, code: normalizedTOTP) else {
                 setupError = "Invalid authenticator code."
                 return
             }
@@ -210,13 +221,15 @@ final class AkashicVaultController: ObservableObject {
                     )
                 } catch {
                     try? FileManager.default.removeItem(at: tmp)
-                    setupError = error.localizedDescription
+                    setupError =
+                        "Could not encrypt or replace your existing database: \(error.localizedDescription). Your original file was left unchanged."
                     return
                 }
             } else if !FileManager.default.fileExists(atPath: dbURL.path) {
                 _ = try TodoDatabase.createEncryptedEmpty(at: dbURL, passphrase: dataKey)
             } else {
-                setupError = "Database already exists in an unknown format."
+                setupError =
+                    "An encrypted database already exists but security metadata is missing. Restore akashic-security.json or remove the stray akashic.sqlite after backup."
                 return
             }
 
@@ -238,7 +251,11 @@ final class AkashicVaultController: ObservableObject {
         do {
             let dataKey = try DataKeyManager.unwrapDataKey(metadata: metadata, password: unlockPassword)
             let totpSecret = try DataKeyManager.openTOTPSecret(metadata: metadata, dataKey: dataKey)
-            guard TOTP.validate(secret: totpSecret, code: unlockTOTP) else {
+            guard let totpNorm = TOTP.sanitizeEnteredCode(unlockTOTP) else {
+                unlockError = "Enter a 6-digit code (digits only, or from AutoFill)."
+                return
+            }
+            guard TOTP.validate(secret: totpSecret, code: totpNorm) else {
                 unlockError = "Invalid authenticator code."
                 return
             }
@@ -258,7 +275,11 @@ final class AkashicVaultController: ObservableObject {
         do {
             let dataKey = try DataKeyManager.unwrapDataKey(metadata: metadata, recoveryCode: unlockRecoveryCode)
             let totpSecret = try DataKeyManager.openTOTPSecret(metadata: metadata, dataKey: dataKey)
-            guard TOTP.validate(secret: totpSecret, code: unlockTOTP) else {
+            guard let totpNorm = TOTP.sanitizeEnteredCode(unlockTOTP) else {
+                unlockError = "Enter a 6-digit code (digits only, or from AutoFill)."
+                return
+            }
+            guard TOTP.validate(secret: totpSecret, code: totpNorm) else {
                 unlockError = "Invalid authenticator code."
                 return
             }
@@ -281,7 +302,11 @@ final class AkashicVaultController: ObservableObject {
                 reason: "Unlock Akashic"
             )
             let totpSecret = try DataKeyManager.openTOTPSecret(metadata: metadata, dataKey: dataKey)
-            guard TOTP.validate(secret: totpSecret, code: unlockTOTP) else {
+            guard let totpNorm = TOTP.sanitizeEnteredCode(unlockTOTP) else {
+                unlockError = "Enter a 6-digit code (digits only, or from AutoFill)."
+                return
+            }
+            guard TOTP.validate(secret: totpSecret, code: totpNorm) else {
                 unlockError = "Invalid authenticator code."
                 return
             }

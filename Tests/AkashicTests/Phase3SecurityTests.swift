@@ -114,4 +114,42 @@ final class Phase3SecurityTests: XCTestCase {
         let r = TodoAPIServer.lockedResponse()
         XCTAssertEqual(r.statusCode, .locked)
     }
+
+    func testTOTPCodeSanitizeAcceptsAutoFillSpacing() {
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("123456"), "123456")
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("123 456"), "123456")
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("12 34 56"), "123456")
+        // Narrow no-break space (Passwords / some locales)
+        XCTAssertEqual(TOTP.sanitizeEnteredCode("123456\u{202f}"), "123456")
+        XCTAssertNil(TOTP.sanitizeEnteredCode("12345"))
+        XCTAssertNil(TOTP.sanitizeEnteredCode("1234567"))
+    }
+
+    /// Apple Passwords and other clients often expect Base32 secrets whose encoded length is a multiple of 8 (RFC 4648 padding).
+    func testTOTPSecretBase32IsPaddedInOtpauthURI() throws {
+        let (_, _, base32, uri) = try DataKeyManager.generateMetadata(username: "Frank", password: "password12")
+        XCTAssertEqual(base32.count % 8, 0)
+        let items = XCTUnwrap(URLComponents(string: uri)?.queryItems)
+        let secretParam = try XCTUnwrap(items.first { $0.name == "secret" }?.value)
+        XCTAssertEqual(secretParam, base32)
+    }
+
+    func testBase32DecodeRoundTripWithPadding() throws {
+        let raw = Data((0 ..< 20).map { UInt8($0) })
+        let encoded = AkashicBase32.encode(raw)
+        XCTAssertEqual(encoded.count, 32)
+        let padded = AkashicBase32.paddedForOTPAuth(encoded)
+        XCTAssertEqual(padded.count % 8, 0)
+        let decoded = try AkashicBase32.decode(padded)
+        XCTAssertEqual(decoded, raw)
+    }
+
+    /// Independent vector: derive HOTP with same algorithm as `TOTP.code`, compare to a hand-computed RFC-style value.
+    func testTOTPIndependentSixDigitVector() {
+        let secret = Data("12345678901234567890".utf8)
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        let t = f.date(from: "2005-03-18T01:58:29Z")!
+        XCTAssertEqual(TOTP.code(secret: secret, date: t, digits: 6), "081804")
+    }
 }

@@ -53,8 +53,11 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 ### TOTP (local second factor)
 
 - **RFC 6238**, HMAC-SHA1, **30 s** step, **6 digits**, standard `otpauth://totp/...` URI with QR during setup.
+- **Base32 in the URI:** The raw secret is 20 bytes; Base32 encoding without padding is often **31 characters**. Apple Passwords and several authenticators expect the `secret=` parameter to use **padded Base32** (length a multiple of 8, `=` padding per RFC 4648). Akashic pads the secret in **both** the `otpauth` URI and the value returned from setup so QR/manual entry match what the app verifies.
+- **Code entry:** Validation strips non-digits (including spaces and narrow spaces from AutoFill) and requires exactly six digits before comparing.
 - The secret is generated once at setup and stored in the sidecar **encrypted with the data key**, in a `LocalSecurityMetadata` shape a future server can mirror for enrollment.
 - Validation accepts clock skew **±1** period (~60 s window).
+- **Wizard:** Going **Back** from the confirm step returns to the QR step **without rotating** the pending setup secret (only “start over” from credentials regenerates keys).
 
 ### Biometrics
 
@@ -71,6 +74,7 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 2. A temp encrypted file is created; **`ATTACH … KEY`** + `SELECT sqlcipher_export('encrypted')`** copies the plaintext DB into encrypted form.
 3. **Row counts** are compared for `todos`, `notes`, `tags`, `note_tags`, `app_meta`, `change_log` (missing tables count as 0).
 4. On success: **atomic replace** — plaintext moved to `akashic.sqlite.plaintext-backup-<ISO8601>` (with `:` → `-` in the timestamp), encrypted temp moved to `akashic.sqlite`. On **any failure**, the original plaintext file is left in place; the app does not delete the backup automatically (user removes it after verifying).
+5. Migration or filesystem failures after TOTP verification are reported with an explicit **encryption / database** error — not as a wrong OTP (which only runs when six digits do not match the sealed secret).
 
 ### Data directory override
 

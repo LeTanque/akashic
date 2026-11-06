@@ -56,7 +56,7 @@ public enum DataKeyManager {
         )
 
         let totpRaw = try randomBytes(count: 20)
-        let totpBase32 = AkashicBase32.encode(Data(totpRaw))
+        let totpBase32 = AkashicBase32.paddedForOTPAuth(AkashicBase32.encode(Data(totpRaw)))
         let sk = SymmetricKey(data: dataKey)
         let totpSealed = try AkashicSealedBlob.seal(plaintext: Data(totpRaw), using: sk)
 
@@ -78,7 +78,8 @@ public enum DataKeyManager {
 
     public static func otpauthURI(username: String, secretBase32: String) -> String {
         let encUser = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
-        let encSecret = secretBase32.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? secretBase32
+        let padded = AkashicBase32.paddedForOTPAuth(secretBase32)
+        let encSecret = padded.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? padded
         return "otpauth://totp/Akashic:\(encUser)?secret=\(encSecret)&issuer=Akashic&algorithm=SHA1&digits=6&period=30"
     }
 

@@ -32,8 +32,21 @@ public enum AkashicBase32 {
         return String(output)
     }
 
+    /// Many authenticators (including Apple Passwords) expect Base32 secrets whose **length is a multiple of 8**
+    /// before padding; our encoder can produce 31 characters for 20 raw bytes. Append RFC 4648 `=` padding.
+    public static func paddedForOTPAuth(_ encoded: String) -> String {
+        let cleaned = encoded.uppercased().filter { ch in ch != "=" && !ch.isWhitespace }
+        guard !cleaned.isEmpty else { return encoded }
+        let rem = cleaned.count % 8
+        guard rem != 0 else { return cleaned }
+        return cleaned + String(repeating: "=", count: 8 - rem)
+    }
+
     public static func decode(_ string: String) throws -> Data {
-        let cleaned = string.uppercased().filter { !$0.isWhitespace }
+        var cleaned = string.uppercased().filter { !$0.isWhitespace }
+        while cleaned.last == "=" {
+            cleaned.removeLast()
+        }
         guard !cleaned.isEmpty else { throw AkashicCryptoError.invalidInput }
         var bits = 0
         var value = 0
