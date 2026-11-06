@@ -8,8 +8,8 @@ final class TodoAPIServer: @unchecked Sendable {
 
     private var runTask: Task<Void, Never>?
 
-    func start(store: TodoStore, noteStore: NoteStore) {
-        guard runTask == nil else { return }
+    func start(store: TodoStore, noteStore: NoteStore, apiService: AkashicAPIService) {
+        stop()
         let port = Self.port
         runTask = Task.detached(priority: .utility) {
             // IPv4 localhost so http://127.0.0.1:4311 and http://localhost:4311 both work.
@@ -18,11 +18,43 @@ final class TodoAPIServer: @unchecked Sendable {
                 return
             }
             let server = HTTPServer(address: address, logger: .disabled)
-            await Self.installRoutes(on: server, store: store, noteStore: noteStore)
+            await Self.installRoutes(on: server, store: store, noteStore: noteStore, apiService: apiService)
             do {
                 try await server.run()
             } catch {
                 NSLog("Akashic API server stopped: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Locked vault: `/health` stays 200; all `/api/*` return 423. No DB handles held.
+    func startLockedOnly(apiService: AkashicAPIService) {
+        stop()
+        let port = Self.port
+        runTask = Task.detached(priority: .utility) {
+            guard let address = try? sockaddr_in.inet(ip4: "127.0.0.1", port: port) else {
+                NSLog("Akashic API server: failed to bind 127.0.0.1:%d", port)
+                return
+            }
+            let server = HTTPServer(address: address, logger: .disabled)
+            await server.appendRoute("GET /health") { _ in
+                json(["status": "ok", "database": "locked", "app": "akashic"])
+            }
+            let lockedPaths = [
+                "GET /api/todos", "POST /api/todos", "PATCH /api/todos/:id", "DELETE /api/todos/:id",
+                "GET /api/notes", "GET /api/notes/:id", "POST /api/notes", "PATCH /api/notes/:id", "DELETE /api/notes/:id",
+                "GET /api/tags", "PATCH /api/tags/:name",
+            ]
+            for path in lockedPaths {
+                await server.appendRoute(HTTPRoute(path)) { _ in
+                    _ = apiService.isLockedForAPI()
+                    return Self.lockedResponse()
+                }
+            }
+            do {
+                try await server.run()
+            } catch {
+                NSLog("Akashic locked API server stopped: \(error.localizedDescription)")
             }
         }
     }
@@ -32,18 +64,36 @@ final class TodoAPIServer: @unchecked Sendable {
         runTask = nil
     }
 
-    private static func installRoutes(on server: HTTPServer, store: TodoStore, noteStore: NoteStore) async {
+    static func lockedResponse() -> HTTPResponse {
+        json(
+            ["error": "locked", "detail": "Akashic is locked; unlock the app to use the API"],
+            status: .locked
+        )
+    }
+
+    private static func installRoutes(
+        on server: HTTPServer,
+        store: TodoStore,
+        noteStore: NoteStore,
+        apiService: AkashicAPIService
+    ) async {
         await server.appendRoute("GET /health") { _ in
             json(["status": "ok", "database": "connected", "app": "akashic"])
         }
 
         await server.appendRoute("GET /api/todos") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             let status = request.query["status"] ?? "all"
             let items = await MainActor.run { store.todos(status: status).map(TodoAPIDTO.init) }
             return json(["todos": items])
         }
 
         await server.appendRoute("POST /api/todos") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             let bodyData = try await request.bodyData
             let body = try? JSONDecoder().decode(CreateTodoBody.self, from: bodyData)
             guard let body else {
@@ -66,6 +116,9 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("PATCH /api/todos/:id") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             guard let idString = request.routeParameters["id"],
                   let id = UUID(uuidString: idString) else {
                 return json(["error": "invalid id"], status: .badRequest)
@@ -94,6 +147,9 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("DELETE /api/todos/:id") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             guard let idString = request.routeParameters["id"],
                   let id = UUID(uuidString: idString) else {
                 return json(["error": "invalid id"], status: .badRequest)
@@ -106,11 +162,17 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("GET /api/notes") { _ in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             let items = await MainActor.run { noteStore.notes.map(NoteAPIDTO.init) }
             return json(["notes": items])
         }
 
         await server.appendRoute("GET /api/notes/:id") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             guard let idString = request.routeParameters["id"],
                   let id = UUID(uuidString: idString) else {
                 return json(["error": "invalid id"], status: .badRequest)
@@ -123,6 +185,9 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("POST /api/notes") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             let bodyData = try await request.bodyData
             guard let object = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any] else {
                 return json(["error": "invalid JSON body"], status: .badRequest)
@@ -147,6 +212,9 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("PATCH /api/notes/:id") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             guard let idString = request.routeParameters["id"],
                   let id = UUID(uuidString: idString) else {
                 return json(["error": "invalid id"], status: .badRequest)
@@ -180,6 +248,9 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("DELETE /api/notes/:id") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             guard let idString = request.routeParameters["id"],
                   let id = UUID(uuidString: idString) else {
                 return json(["error": "invalid id"], status: .badRequest)
@@ -192,11 +263,17 @@ final class TodoAPIServer: @unchecked Sendable {
         }
 
         await server.appendRoute("GET /api/tags") { _ in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             let tags = await MainActor.run { noteStore.allTagDefinitions().map(TagAPIDTO.init) }
             return json(["tags": tags])
         }
 
         await server.appendRoute("PATCH /api/tags/:name") { request in
+            if apiService.isLockedForAPI() {
+                return Self.lockedResponse()
+            }
             guard let nameRaw = request.routeParameters["name"] else {
                 return json(["error": "name required"], status: .badRequest)
             }
@@ -326,3 +403,4 @@ private func json<T: Encodable>(_ value: T, status: HTTPStatusCode = .ok) -> HTT
         body: data
     )
 }
+

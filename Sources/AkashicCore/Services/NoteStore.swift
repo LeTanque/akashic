@@ -21,14 +21,6 @@ public final class NoteStore: ObservableObject {
     private let db: DatabaseQueue
     private var installation: InstallationContext
 
-    public init() {
-        db = (try? TodoDatabase.open()) ?? {
-            fatalError("Failed to open Akashic database")
-        }()
-        installation = try! db.write { try InstallationContext.loadOrCreate(in: $0) }
-        refresh()
-    }
-
     public init(db: DatabaseQueue) {
         self.db = db
         installation = try! db.write { try InstallationContext.loadOrCreate(in: $0) }

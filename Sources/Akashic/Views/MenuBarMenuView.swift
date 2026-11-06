@@ -3,10 +3,7 @@ import SwiftUI
 
 /// Standard `MenuBarExtra` menu items (native NSMenu appearance, no custom popover chrome).
 struct MenuBarMenuView: View {
-    @EnvironmentObject private var store: TodoStore
-    @EnvironmentObject private var editorSession: TodoEditorSession
-    @EnvironmentObject private var sidebarVisibility: SidebarVisibilityStore
-    @EnvironmentObject private var mainSectionVisibility: MainSectionVisibilityStore
+    @EnvironmentObject private var root: AkashicRootModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -15,12 +12,22 @@ struct MenuBarMenuView: View {
         }
 
         Button("New Todo") {
-            _ = editorSession.beginNewTodo(store: store)
+            guard let store = root.vault.todoStore else {
+                openMainWindow()
+                return
+            }
+            _ = root.editorSession.beginNewTodo(store: store)
             openMainWindow()
         }
         .keyboardShortcut("n", modifiers: .command)
+        .disabled(root.vault.presentation != .ready)
 
         Divider()
+
+        Button("Lock Akashic") {
+            NotificationCenter.default.post(name: .akashicRequestLock, object: nil)
+        }
+        .disabled(root.vault.presentation != .ready)
 
         Button("Settings…") {
             NotificationCenter.default.post(name: .akashicOpenSettings, object: nil)
@@ -29,13 +36,13 @@ struct MenuBarMenuView: View {
 
         Divider()
 
-        Button(sidebarVisibility.toggleMenuTitle) {
-            sidebarVisibility.toggle()
+        Button(root.sidebarVisibility.toggleMenuTitle) {
+            root.sidebarVisibility.toggle()
             openMainWindow()
         }
 
-        Button(mainSectionVisibility.toggleMenuTitle) {
-            mainSectionVisibility.toggle()
+        Button(root.mainSectionVisibility.toggleMenuTitle) {
+            root.mainSectionVisibility.toggle()
             openMainWindow()
         }
 
