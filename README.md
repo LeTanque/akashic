@@ -59,7 +59,7 @@ On **first successful unlock with an empty DB**, Akashic imports the bundled **d
 
 **Lock:** The app starts locked; **auto-lock** after configurable idle time (default 15 minutes) and on **sleep**; use **Lock Akashic** in the menu-bar menu.
 
-Sync-oriented schema, crypto details, and merge rules are in [docs/sync-design.md](docs/sync-design.md).
+Sync-oriented schema, crypto details, and merge rules are in [docs/sync-design.md](docs/sync-design.md). The Phase 4 home relay HTTP API is specified in [docs/sync-protocol.md](docs/sync-protocol.md) (Go implementation under `server/`).
 
 Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar menu only when you intentionally want to load sample or your own exported JSON into the local DB. Both actions ask for confirmation because they replace your current todos.
 

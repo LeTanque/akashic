@@ -90,11 +90,12 @@ Tags additionally have `sync_id` (UUID) as a stable identity alongside the exist
 
 - Full build, Keychain biometrics prompts, and SQLCipher linkage were **not** run on Linux; a Mac builder should compile and run `swift test` / `xcodebuild`.
 
-## Phase 4+ (planned)
+## Phase 4 (home sync relay)
 
-1. **Home server (e.g. Raspberry Pi)**: account directory, TOTP enrollment, **device registry** and approval (any already-approved device or recovery code can approve a new device).
+1. **Home server (e.g. Raspberry Pi)**: account directory, TOTP enrollment, **device registry** and approval (any already-approved device or recovery code can approve a new device). Implemented as Go `server/` (`akashic-syncd`). Wire protocol: [sync-protocol.md](sync-protocol.md); ops notes: `server/README.md`.
 2. **Relay**: server stores **opaque** encrypted change batches (cannot read user data); devices exchange end-to-end encrypted deltas.
-3. **iPad app**: shares `AkashicCore`; same merge rules, schema, and security sidecar layout.
+3. **iPad app** (still planned): shares `AkashicCore`; same merge rules, schema, and security sidecar layout.
+
 
 ## Manual verification (Phase 2 PR)
 

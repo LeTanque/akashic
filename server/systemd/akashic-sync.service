@@ -1,0 +1,35 @@
+[Unit]
+Description=Akashic sync relay (home server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=akashic
+Group=akashic
+# Install script sets this (default).
+ExecStart=/usr/local/bin/akashic-syncd \
+  -data-dir /var/lib/akashic-sync \
+  -db /var/lib/akashic-sync/akashic-sync.db \
+  -listen :8443 \
+  -tls-cert /var/lib/akashic-sync/tls/cert.pem \
+  -tls-key /var/lib/akashic-sync/tls/key.pem
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/akashic-sync
+LimitNOFILE=65535
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
