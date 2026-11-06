@@ -140,8 +140,7 @@ public enum AkashicPlaintextMigration {
         if let err = AkashicPlaintextMigrationTestingHooks.atomicSwapError {
             throw err
         }
-        let ts = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
-        let backupName = "akashic.sqlite.plaintext-backup-\(ts)"
+        let backupName = AkashicPlaintextBackupNames.plaintextBackupFilename()
         let backupURL = backupDirectory.appendingPathComponent(backupName)
 
         guard FileManager.default.fileExists(atPath: encryptedTempURL.path) else {

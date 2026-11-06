@@ -354,7 +354,7 @@ final class AkashicVaultController: ObservableObject {
                     }
                 }
                 return
-            }
+             }
         } else if !dbExists {
             do {
                 try Self.createEncryptedEmptyAtomically(at: dbURL, passphrase: dataKey)

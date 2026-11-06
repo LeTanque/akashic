@@ -100,6 +100,8 @@ final class FirstRunSetupFailureTests: XCTestCase {
         let queue = try DatabaseQueue(path: url.path, configuration: config)
         try queue.write { db in
             try db.execute(sql: "PRAGMA journal_mode = WAL")
+            // Prevent autocheckpoint from truncating `-wal` before assertions / export path.
+            try db.execute(sql: "PRAGMA wal_autocheckpoint = 0")
         }
         try TodoDatabase.migrator.migrate(queue)
 
@@ -196,8 +198,18 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertEqual(SQLiteDiskBundle.walURL(main: base).path, base.path + "-wal")
         XCTAssertEqual(SQLiteDiskBundle.shmURL(main: base).path, base.path + "-shm")
 
-        let backup = URL(fileURLWithPath: "/tmp/vault/akashic.sqlite.plaintext-backup-ts", isDirectory: false)
+        let backup = URL(
+            fileURLWithPath: "/tmp/vault/\(AkashicPlaintextBackupNames.plaintextBackupFilename(for: Date(timeIntervalSince1970: 0)))",
+            isDirectory: false
+        )
         XCTAssertEqual(SQLiteDiskBundle.walURL(main: backup).path, backup.path + "-wal")
+    }
+
+    func testPlaintextBackupNamingMatchesMigration() {
+        let name = AkashicPlaintextBackupNames.plaintextBackupFilename(for: Date(timeIntervalSince1970: 1_700_000_000))
+        XCTAssertTrue(name.hasPrefix(AkashicPlaintextBackupNames.prefix))
+        XCTAssertFalse(name.hasSuffix(".sqlite"), "Real migration backup has no .sqlite extension")
+        XCTAssertTrue(AkashicPlaintextBackupNames.isPlaintextBackupFilename(name))
     }
 
     func testMoveBundlePartialFailureRestoresSource() throws {
@@ -243,12 +255,19 @@ final class FirstRunSetupFailureTests: XCTestCase {
         var checkpointError: Error?
         DispatchQueue.global(qos: .userInitiated).async {
             defer { checkpointDone.fulfill() }
+            Thread.sleep(forTimeInterval: 0.05)
+            var other: OpaquePointer?
+            guard sqlite3_open_v2(url.path, &other, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil) == SQLITE_OK,
+                  let dbOther = other
+            else {
+                checkpointError = NSError(
+                    domain: "SQLite3Test", code: -1, userInfo: [NSLocalizedDescriptionKey: "open second"]
+                )
+                return
+            }
+            defer { sqlite3_close(dbOther) }
             do {
-                let other = try DatabaseQueue(path: url.path)
-                try other.write { db in
-                    try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
-                }
-                try other.close()
+                try Self.sqlite3WalTruncateCheckpointThrows(dbOther)
             } catch {
                 checkpointError = error
             }
@@ -267,6 +286,37 @@ final class FirstRunSetupFailureTests: XCTestCase {
             let message = errMsg.map { String(cString: $0) } ?? "sqlite3_exec failed (\(rc))"
             sqlite3_free(errMsg)
             throw NSError(domain: "SQLite3Test", code: Int(rc), userInfo: [NSLocalizedDescriptionKey: message])
+        }
+    }
+
+    /// Mirrors `SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL` using sqlite3 only (no nested GRDB transactions).
+    private static func sqlite3WalTruncateCheckpointThrows(_ db: OpaquePointer?) throws {
+        var modeStmt: OpaquePointer?
+        defer { sqlite3_finalize(modeStmt) }
+        guard sqlite3_prepare_v2(db, "PRAGMA journal_mode", -1, &modeStmt, nil) == SQLITE_OK else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "prepare journal_mode")
+        }
+        guard sqlite3_step(modeStmt) == SQLITE_ROW else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "journal_mode step")
+        }
+        let mode = String(cString: sqlite3_column_text(modeStmt, 0)).lowercased()
+        guard mode == "wal" else { return }
+
+        var ckptStmt: OpaquePointer?
+        defer { sqlite3_finalize(ckptStmt) }
+        guard sqlite3_prepare_v2(db, "PRAGMA wal_checkpoint(TRUNCATE)", -1, &ckptStmt, nil) == SQLITE_OK else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "prepare wal_checkpoint")
+        }
+        guard sqlite3_step(ckptStmt) == SQLITE_ROW else {
+            throw AkashicSQLiteBundleError.walCheckpointFailed(reason: "wal_checkpoint step")
+        }
+        let busy = sqlite3_column_int64(ckptStmt, 0)
+        let logPages = sqlite3_column_int64(ckptStmt, 1)
+        if busy != 0 {
+            throw AkashicSQLiteBundleError.walCheckpointBusy
+        }
+        if logPages != 0 {
+            throw AkashicSQLiteBundleError.walCheckpointIncomplete(remainingLogPages: logPages)
         }
     }
 
@@ -562,7 +612,9 @@ final class FirstRunSetupFailureTests: XCTestCase {
 
     func testOrphanPlaintextBackupWithoutLiveDbBlocksEmptyVault() async throws {
         let folder = try AkashicPaths.applicationSupportFolder()
-        let backup = folder.appendingPathComponent("akashic.sqlite.plaintext-backup-test.sqlite")
+        let backup = folder.appendingPathComponent(
+            AkashicPlaintextBackupNames.plaintextBackupFilename(for: Date(timeIntervalSince1970: 1_700_000_001))
+        )
         let magic = "SQLite format 3\u{0}".data(using: .ascii)!
         try magic.write(to: backup)
 

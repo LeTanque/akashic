@@ -74,10 +74,7 @@ public enum SetupMigrationHazardDetector {
         guard let entries = try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else {
             return nil
         }
-        let backups = entries.filter { name in
-            let n = name.lastPathComponent
-            return n.hasPrefix("akashic.sqlite.plaintext-backup-") && n.hasSuffix(".sqlite")
-        }
+        let backups = entries.filter { AkashicPlaintextBackupNames.isPlaintextBackupFilename($0.lastPathComponent) }
         guard let first = backups.first else { return nil }
         return
             "A plaintext database backup exists at \(first.path) but `akashic.sqlite` is missing and security metadata is absent. Restore or reconcile files before continuing; do not create a new vault over stranded data."

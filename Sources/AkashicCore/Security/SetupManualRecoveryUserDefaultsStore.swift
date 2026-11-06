@@ -1,10 +1,14 @@
+import CryptoKit
 import Foundation
 
 /// Secondary latch when the vault folder cannot persist `akashic-setup-manual-recovery.txt` (package tests / rare disk errors).
 public enum SetupManualRecoveryUserDefaultsStore {
     private static func storageKey() throws -> String {
-        let folder = try AkashicPaths.applicationSupportFolder().path
-        return "akashic.setup.manualRecovery.reason.\(folder.hashValue)"
+        let raw = try AkashicPaths.applicationSupportFolder().path
+        let canonical = (raw as NSString).standardizingPath
+        let digest = SHA256.hash(data: Data(canonical.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "akashic.setup.manualRecovery.reason.sha256.\(hex)"
     }
 
     public static func saveReason(_ message: String) throws {

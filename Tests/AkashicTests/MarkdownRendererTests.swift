@@ -156,12 +156,12 @@ final class MarkdownRendererTests: XCTestCase {
 
     func testNestedListKeepsBothItemsVisible() {
         let text = String(MarkdownRenderer.attributedString(from: "- parent\n  - child").characters)
-        let bullet = MarkdownRenderer.unorderedListBullet
         XCTAssertTrue(text.contains("parent"))
         XCTAssertTrue(text.contains("child"))
-        // Attributed output may represent nesting without duplicating the bullet character;
-        // require both labels remain visible.
-        XCTAssertGreaterThanOrEqual(text.filter { $0 == bullet }.count, 1)
+        XCTAssertGreaterThanOrEqual(
+            text.filter { $0 == MarkdownRenderer.unorderedListBullet }.count,
+            2
+        )
     }
 
     func testSmartDashListMarkersStillRenderAsLists() {
