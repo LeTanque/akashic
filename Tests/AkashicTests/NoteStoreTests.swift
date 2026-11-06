@@ -5,7 +5,7 @@ import XCTest
 final class NoteStoreTests: XCTestCase {
     func testCRUDAndTagLinks() throws {
         let store = try NoteStore.isolatedForTesting()
-        var draft = NoteItem.new(title: "First", body: "Body", tags: [
+        var draft = NoteItem.unsavedDraft(title: "First", body: "Body", tags: [
             AkashicTag(name: "work", color: .orange),
         ])
         let saved = store.insertSavedNote(from: draft)
@@ -25,11 +25,11 @@ final class NoteStoreTests: XCTestCase {
 
     func testTagColorPersistsAndPropagatesToAllNotes() throws {
         let store = try NoteStore.isolatedForTesting()
-        _ = store.insertSavedNote(from: NoteItem.new(
+        _ = store.insertSavedNote(from: NoteItem.unsavedDraft(
             title: "A",
             tags: [AkashicTag(name: "shared", color: .cyan)]
         ))
-        _ = store.insertSavedNote(from: NoteItem.new(
+        _ = store.insertSavedNote(from: NoteItem.unsavedDraft(
             title: "B",
             tags: [AkashicTag(name: "shared", color: .cyan)]
         ))
@@ -44,8 +44,8 @@ final class NoteStoreTests: XCTestCase {
 
     func testFilterAndSort() throws {
         let store = try NoteStore.isolatedForTesting()
-        _ = store.insertSavedNote(from: NoteItem.new(title: "Zebra", tags: [AkashicTag(name: "b")]))
-        _ = store.insertSavedNote(from: NoteItem.new(title: "Alpha", tags: [AkashicTag(name: "a")]))
+        _ = store.insertSavedNote(from: NoteItem.unsavedDraft(title: "Zebra", tags: [AkashicTag(name: "b")]))
+        _ = store.insertSavedNote(from: NoteItem.unsavedDraft(title: "Alpha", tags: [AkashicTag(name: "a")]))
         let tagA = try XCTUnwrap(store.allTagDefinitions().first { $0.name == "a" })
         let filtered = store.filteredNotes(tag: tagA, sort: .titleAZ)
         XCTAssertEqual(filtered.map(\.title), ["Alpha"])
@@ -63,7 +63,7 @@ final class NoteStoreTests: XCTestCase {
 
     func testInsertSavedNoteSetsCreatedAtAtSaveTime() throws {
         let store = try NoteStore.isolatedForTesting()
-        var draft = NoteItem.new(title: "Saved later", body: "")
+        var draft = NoteItem.unsavedDraft(title: "Saved later", body: "")
         let stale = Date(timeIntervalSince1970: 1_000)
         draft.createdAt = stale
         draft.updatedAt = stale

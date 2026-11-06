@@ -14,14 +14,14 @@ struct CyberpunkSeedExportTodo: Encodable {
     let updated_at: String
 }
 
-enum SeedExporter {
+public enum SeedExporter {
     private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
 
-    static func exportFile(from todos: [TodoItem], source: String = "akashic export") -> CyberpunkSeedExportFile {
+    public static func exportFile(from todos: [TodoItem], source: String = "akashic export") -> CyberpunkSeedExportFile {
         let ordered = todos.sorted { lhs, rhs in
             if lhs.sortOrder != rhs.sortOrder { return lhs.sortOrder < rhs.sortOrder }
             return lhs.updatedAt > rhs.updatedAt
@@ -39,7 +39,7 @@ enum SeedExporter {
         return CyberpunkSeedExportFile(source: source, todos: rows)
     }
 
-    static func encodeJSON(from todos: [TodoItem], source: String = "akashic export") throws -> Data {
+    public static func encodeJSON(from todos: [TodoItem], source: String = "akashic export") throws -> Data {
         let file = exportFile(from: todos, source: source)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

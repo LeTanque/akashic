@@ -4,8 +4,8 @@ import XCTest
 final class SeedExporterTests: XCTestCase {
     func testExportImportRoundTripPreservesTitlesAndFlags() throws {
         let original = [
-            TodoItem.new(title: "Alpha", priority: .high),
-            TodoItem.new(title: "Beta", priority: .low),
+            TodoItem.unsavedDraft(title: "Alpha", priority: .high),
+            TodoItem.unsavedDraft(title: "Beta", priority: .low),
         ]
         var completed = original[1]
         completed.completed = true
@@ -24,7 +24,7 @@ final class SeedExporterTests: XCTestCase {
     }
 
     func testExportUsesSequentialNumericIds() throws {
-        let todos = (0..<3).map { TodoItem.new(title: "Item \($0)") }
+        let todos = (0..<3).map { TodoItem.unsavedDraft(title: "Item \($0)") }
         let file = SeedExporter.exportFile(from: todos)
         XCTAssertEqual(file.todos.map(\.id), [1, 2, 3])
     }

@@ -1,45 +1,49 @@
+import Combine
 import Foundation
 import GRDB
-import SwiftUI
 
 @MainActor
-final class TodoStore: ObservableObject {
-    @Published private(set) var todos: [TodoItem] = []
-    @Published var selectedTodoID: UUID?
-    @Published var lastImportMessage: String?
-    @Published private(set) var completionCelebrationID: UUID?
-    @Published private(set) var deletionCelebrationID: UUID?
-    @Published private(set) var revealTodoInListID: UUID?
+public final class TodoStore: ObservableObject {
+    @Published public private(set) var todos: [TodoItem] = []
+    @Published public var selectedTodoID: UUID?
+    @Published public var lastImportMessage: String?
+    @Published public private(set) var completionCelebrationID: UUID?
+    @Published public private(set) var deletionCelebrationID: UUID?
+    @Published public private(set) var revealTodoInListID: UUID?
 
     private let db: DatabaseQueue
+    private var installation: InstallationContext
 
-    init() {
+    public init() {
         db = (try? TodoDatabase.open()) ?? {
             fatalError("Failed to open Akashic database")
         }()
+        installation = try! db.write { try InstallationContext.loadOrCreate(in: $0) }
         refresh()
         runFirstLaunchSeedIfNeeded()
     }
 
     /// Empty in-memory store for tests. Does not seed or start the HTTP API.
-    init(db: DatabaseQueue) {
+    public init(db: DatabaseQueue) {
         self.db = db
+        installation = try! db.write { try InstallationContext.loadOrCreate(in: $0) }
         refresh()
     }
 
     /// Testing hook: empty in-memory database, no seed, no API server.
-    static func isolatedForTesting() throws -> TodoStore {
+    public static func isolatedForTesting() throws -> TodoStore {
         try TodoStore(db: TodoDatabase.openInMemory())
     }
 
-    var selectedTodo: TodoItem? {
+    public var selectedTodo: TodoItem? {
         guard let id = selectedTodoID else { return nil }
         return todos.first { $0.id == id }
     }
 
-    func refresh() {
+    public func refresh() {
         todos = (try? db.read { db in
             try TodoItem
+                .filter(Column("deleted_at") == nil)
                 .order(
                     TodoItem.Columns.completed.asc,
                     TodoItem.Columns.sortOrder.asc,
@@ -51,18 +55,18 @@ final class TodoStore: ObservableObject {
     }
 
     /// Clears list selection so the editor shows an in-memory blank draft (no DB insert).
-    func beginNewTodoDraft() {
+    public func beginNewTodoDraft() {
         selectedTodoID = nil
     }
 
     /// Legacy name used by menus; opens a blank draft without persisting.
-    func addTodo(title: String = "") {
+    public func addTodo(title: String = "") {
         _ = title
         beginNewTodoDraft()
     }
 
     @discardableResult
-    func createTodo(
+    public func createTodo(
         title: String,
         description: String = "",
         priority: TodoPriority = .medium
@@ -72,7 +76,7 @@ final class TodoStore: ObservableObject {
 
     /// Persists a new todo from the editor draft (single insert + order write).
     @discardableResult
-    func insertSavedTodo(from draft: TodoItem) -> TodoItem {
+    public func insertSavedTodo(from draft: TodoItem) -> TodoItem {
         insertNewTodo(
             title: draft.title,
             description: draft.description,
@@ -83,7 +87,7 @@ final class TodoStore: ObservableObject {
         )
     }
 
-    func update(_ item: TodoItem) {
+    public func update(_ item: TodoItem) {
         guard let existing = todos.first(where: { $0.id == item.id }) else {
             persist(item, bumpUpdatedAt: true)
             return
@@ -93,9 +97,9 @@ final class TodoStore: ObservableObject {
         persist(copy, bumpUpdatedAt: true)
     }
 
-    func delete(_ item: TodoItem) {
+    public func delete(_ item: TodoItem) {
         _ = try? db.write { db in
-            try item.delete(db)
+            try self.softDeleteTodo(item.id, db: db)
         }
         if selectedTodoID == item.id {
             selectedTodoID = nil
@@ -105,13 +109,13 @@ final class TodoStore: ObservableObject {
     }
 
     @discardableResult
-    func delete(id: UUID) -> Bool {
+    public func delete(id: UUID) -> Bool {
         guard let item = todos.first(where: { $0.id == id }) else { return false }
         delete(item)
         return true
     }
 
-    func toggleCompletion(for id: UUID) {
+    public func toggleCompletion(for id: UUID) {
         guard var item = todos.first(where: { $0.id == id }) else { return }
         let wasCompleted = item.completed
         item.completed.toggle()
@@ -128,15 +132,15 @@ final class TodoStore: ObservableObject {
     }
 
     /// Shared cyan border breathing effect (completion, successful todo Save, etc.).
-    func triggerBreathingCelebration() {
+    public func triggerBreathingCelebration() {
         completionCelebrationID = UUID()
     }
 
-    func revealTodoInList(_ id: UUID) {
+    public func revealTodoInList(_ id: UUID) {
         revealTodoInListID = id
     }
 
-    func todos(status: String) -> [TodoItem] {
+    public func todos(status: String) -> [TodoItem] {
         switch status.lowercased() {
         case "active":
             return todos.filter { !$0.completed }
@@ -148,7 +152,7 @@ final class TodoStore: ObservableObject {
     }
 
     @discardableResult
-    func applyPatch(
+    public func applyPatch(
         id: UUID,
         title: String?,
         description: String?,
@@ -174,14 +178,13 @@ final class TodoStore: ObservableObject {
     }
 
     /// Drag-reorder within the currently displayed (possibly filtered) list.
-    /// Completed items stay stacked after incomplete items; priority does not block the drop.
-    func moveTodos(from source: IndexSet, to destination: Int, in displayed: [TodoItem]) {
+    public func moveTodos(from source: IndexSet, to destination: Int, in displayed: [TodoItem]) {
         var reordered = displayed
         reordered.move(fromOffsets: source, toOffset: destination)
         applyManualOrder(reordered)
     }
 
-    func applyManualOrder(_ orderedSubset: [TodoItem]) {
+    public func applyManualOrder(_ orderedSubset: [TodoItem]) {
         let incomplete = orderedSubset.filter { !$0.completed }
         let complete = orderedSubset.filter(\.completed)
         var next = todos
@@ -190,7 +193,7 @@ final class TodoStore: ObservableObject {
         writeOrder(next)
     }
 
-    func importSeedFromBundle(replaceExisting: Bool) {
+    public func importSeedFromBundle(replaceExisting: Bool) {
         guard let data = SeedImporter.bundledSeedData() else {
             lastImportMessage = "Bundled seed file not found."
             return
@@ -198,7 +201,7 @@ final class TodoStore: ObservableObject {
         importSeedData(data, replaceExisting: replaceExisting)
     }
 
-    func importSeedFromFile(url: URL) {
+    public func importSeedFromFile(url: URL) {
         guard let data = try? Data(contentsOf: url) else {
             lastImportMessage = "Could not read \(url.lastPathComponent)."
             return
@@ -206,7 +209,7 @@ final class TodoStore: ObservableObject {
         importSeedData(data, replaceExisting: true)
     }
 
-    func exportSeedJSON(source: String = "akashic export") throws -> Data {
+    public func exportSeedJSON(source: String = "akashic export") throws -> Data {
         try SeedExporter.encodeJSON(from: todos, source: source)
     }
 
@@ -234,7 +237,7 @@ final class TodoStore: ObservableObject {
         completed: Bool = false,
         completedAt: Date? = nil
     ) -> TodoItem {
-        var item = TodoItem.new(title: title, description: description, priority: priority)
+        var item = installation.freshTodo(title: title, description: description, priority: priority)
         item.completeBy = completeBy
         item.completed = completed
         item.completedAt = completed ? (completedAt ?? Date()) : nil
@@ -247,14 +250,13 @@ final class TodoStore: ObservableObject {
         return todos.first { $0.id == id } ?? item
     }
 
-    /// Insert at the start of the matching priority band among incomplete items (high-first default).
-    static func insertionIndex(for priority: TodoPriority, in items: [TodoItem]) -> Int {
+    public static func insertionIndex(for priority: TodoPriority, in items: [TodoItem]) -> Int {
         items.firstIndex {
             !$0.completed && $0.priority.sortOrder >= priority.sortOrder
         } ?? items.firstIndex(where: \.completed) ?? items.count
     }
 
-    static func replacingRelativeOrder(in items: [TodoItem], with orderedSubset: [TodoItem]) -> [TodoItem] {
+    public static func replacingRelativeOrder(in items: [TodoItem], with orderedSubset: [TodoItem]) -> [TodoItem] {
         guard !orderedSubset.isEmpty else { return items }
         let ids = Set(orderedSubset.map(\.id))
         var iterator = orderedSubset.makeIterator()
@@ -269,7 +271,7 @@ final class TodoStore: ObservableObject {
             for (index, item) in items.enumerated() {
                 var copy = item
                 copy.sortOrder = index
-                try copy.save(db)
+                try self.persistTodo(&copy, bumpUpdatedAt: false, changedKeys: ["sort_order"], db: db)
             }
         }
         refresh()
@@ -281,9 +283,80 @@ final class TodoStore: ObservableObject {
             copy.updatedAt = Date()
         }
         try? db.write { db in
-            try copy.save(db)
+            try self.persistTodo(&copy, bumpUpdatedAt: bumpUpdatedAt, changedKeys: nil, db: db)
         }
         refresh()
+    }
+
+    private func persistTodo(
+        _ item: inout TodoItem,
+        bumpUpdatedAt: Bool,
+        changedKeys: Set<String>?,
+        db: Database
+    ) throws {
+        let before = try TodoItem.fetchOne(db, key: item.id.uuidString)
+        let clock = installation.tick()
+        item.hlc = clock
+        if bumpUpdatedAt {
+            item.updatedAt = Date()
+        }
+        var keys = changedKeys
+        if keys == nil {
+            keys = diffTodoKeys(before: before, after: item)
+        }
+        for k in keys ?? [] {
+            item.fieldClocks[k] = clock
+        }
+        item.version.set(clock)
+        try item.save(db)
+        let fc = fieldChangeMap(for: keys ?? [], clock: clock)
+        try appendChangeLog(entity: .todo, recordID: item.id.uuidString, fields: fc, hlc: clock, db: db)
+    }
+
+    private func softDeleteTodo(_ id: UUID, db: Database) throws {
+        guard var row = try TodoItem.fetchOne(db, key: id.uuidString) else { return }
+        let clock = installation.tick()
+        row.deletedAt = Date()
+        row.hlc = clock
+        row.fieldClocks["deleted_at"] = clock
+        row.version.set(clock)
+        try row.save(db)
+        try appendChangeLog(entity: .todo, recordID: id.uuidString, fields: ["deleted_at": "\(clock.wallMillis)"], hlc: clock, db: db)
+    }
+
+    private func diffTodoKeys(before: TodoItem?, after: TodoItem) -> Set<String> {
+        guard let before else {
+            return ["title", "description", "completed", "priority", "complete_by", "completed_at", "sort_order"]
+        }
+        var keys = Set<String>()
+        if before.title != after.title { keys.insert("title") }
+        if before.description != after.description { keys.insert("description") }
+        if before.completed != after.completed { keys.insert("completed") }
+        if before.priority != after.priority { keys.insert("priority") }
+        if before.completeBy != after.completeBy { keys.insert("complete_by") }
+        if before.completedAt != after.completedAt { keys.insert("completed_at") }
+        if before.sortOrder != after.sortOrder { keys.insert("sort_order") }
+        return keys
+    }
+
+    private func fieldChangeMap(for keys: Set<String>, clock: HybridLogicalClock) -> [String: String] {
+        var m: [String: String] = [:]
+        for k in keys.sorted() {
+            m[k] = "\(clock.wallMillis)-\(clock.counter)"
+        }
+        return m
+    }
+
+    private func appendChangeLog(entity: SyncEntity, recordID: String, fields: [String: String], hlc: HybridLogicalClock, db: Database) throws {
+        guard !fields.isEmpty else { return }
+        let entry = ChangeLogEntry(
+            recordID: recordID,
+            entity: entity,
+            fieldChanges: fields,
+            hlc: hlc,
+            deviceID: installation.deviceId
+        )
+        try entry.insert(db)
     }
 
     private func runFirstLaunchSeedIfNeeded() {

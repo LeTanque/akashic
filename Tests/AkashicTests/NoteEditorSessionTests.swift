@@ -5,8 +5,8 @@ import XCTest
 final class NoteEditorSessionTests: XCTestCase {
     func testSelectNoteBlockedWhenDirty() throws {
         let store = try NoteStore.isolatedForTesting()
-        let first = store.insertSavedNote(from: NoteItem.new(title: "One"))
-        let second = store.insertSavedNote(from: NoteItem.new(title: "Two"))
+        let first = store.insertSavedNote(from: NoteItem.unsavedDraft(title: "One"))
+        let second = store.insertSavedNote(from: NoteItem.unsavedDraft(title: "Two"))
 
         let session = NoteEditorSession { _ in .cancel }
         _ = session.selectNote(first, store: store)

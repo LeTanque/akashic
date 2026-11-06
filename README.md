@@ -7,7 +7,9 @@ Native macOS menu-bar todo app (SwiftUI + SQLite). Accessory app with no Dock ic
 ## Requirements
 
 - macOS 15 or later
-- Xcode 15+ or Swift 5.9+ toolchain
+- Xcode 16+ or Swift 6 toolchain (`Package.swift` uses `swift-tools-version: 6.0`)
+
+Shared logic (models, database, sync bookkeeping, merge helpers) lives in the **`AkashicCore`** library target (macOS 15 + iOS 17); the `Akashic` executable is the menu-bar app.
 
 ## Build and run
 
@@ -37,7 +39,9 @@ open -a Akashic
 
 Do **not** commit that file, exports of personal todos, or dumps named like `seed-from-*.json`. Those patterns are gitignored.
 
-On **first launch with an empty database**, Akashic imports the bundled **demo** seed (`Sources/Akashic/Resources/akashic-seed-todos.json`). That seed is sample content only — replace it with your own local list in Application Support; never put personal todos in the bundled seed.
+On **first launch with an empty database**, Akashic imports the bundled **demo** seed (`Sources/AkashicCore/Resources/akashic-seed-todos.json`). That seed is sample content only — replace it with your own local list in Application Support; never put personal todos in the bundled seed.
+
+Sync-oriented schema and merge rules are described in [docs/sync-design.md](docs/sync-design.md).
 
 Use **Import Demo Seed…** or **Import JSON…** from the **sparkles** menu-bar menu only when you intentionally want to load sample or your own exported JSON into the local DB. Both actions ask for confirmation because they replace your current todos.
 

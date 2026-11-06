@@ -15,7 +15,7 @@ struct NoteFormModel: Equatable {
     }
 
     static func blankItem() -> NoteItem {
-        NoteItem.new(title: "", body: "", tags: [])
+        NoteItem.unsavedDraft(title: "", body: "", tags: [])
     }
 
     var isNew: Bool { savedBaseline == nil }

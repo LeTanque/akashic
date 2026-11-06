@@ -15,7 +15,7 @@ struct CyberpunkSeedTodo: Decodable {
     let updated_at: String
 }
 
-enum SeedImporter {
+public enum SeedImporter {
     private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -28,21 +28,22 @@ enum SeedImporter {
         return f
     }()
 
-    static func parseSeedData(_ data: Data) throws -> [TodoItem] {
+    public static func parseSeedData(_ data: Data) throws -> [TodoItem] {
         let seed = try JSONDecoder().decode(CyberpunkSeedFile.self, from: data)
         return seed.todos.map { map($0) }
     }
 
-    static func bundledSeedData() -> Data? {
+    public static func bundledSeedData() -> Data? {
         guard let url = Bundle.module.url(forResource: "akashic-seed-todos", withExtension: "json") else {
             return nil
         }
         return try? Data(contentsOf: url)
     }
 
-    static func importItems(_ items: [TodoItem], into db: DatabaseQueue, replaceExisting: Bool) throws -> Int {
+    public static func importItems(_ items: [TodoItem], into db: DatabaseQueue, replaceExisting: Bool) throws -> Int {
         let ordered = items.sorted(by: TodoItem.defaultStackOrder)
         return try db.write { database in
+            let installation = try InstallationContext.loadOrCreate(in: database)
             if replaceExisting {
                 try TodoItem.deleteAll(database)
             }
@@ -52,14 +53,33 @@ enum SeedImporter {
             } else {
                 let maxOrder = try Int.fetchOne(
                     database,
-                    sql: "SELECT MAX(sort_order) FROM \(TodoItem.databaseTableName)"
+                    sql: "SELECT MAX(sort_order) FROM \(TodoItem.databaseTableName) WHERE deleted_at IS NULL"
                 )
                 base = (maxOrder ?? -1) + 1
             }
-            for (index, item) in ordered.enumerated() {
-                var copy = item
-                copy.sortOrder = base + index
-                try copy.insert(database)
+            for (index, var item) in ordered.enumerated() {
+                let clock = installation.tick()
+                item.sortOrder = base + index
+                item.hlc = clock
+                item.deletedAt = nil
+                item.fieldClocks = FieldClockMap(fields: [
+                    "title": clock,
+                    "description": clock,
+                    "completed": clock,
+                    "priority": clock,
+                    "complete_by": clock,
+                    "completed_at": clock,
+                    "sort_order": clock,
+                ])
+                item.version = VersionVector(map: [installation.deviceId: clock])
+                try item.insert(database)
+                try ChangeLogEntry(
+                    recordID: item.id.uuidString,
+                    entity: .todo,
+                    fieldChanges: ["seed_import": "1"],
+                    hlc: clock,
+                    deviceID: installation.deviceId
+                ).insert(database)
             }
             return ordered.count
         }
@@ -70,6 +90,7 @@ enum SeedImporter {
         let updated = parseDate(seed.updated_at) ?? created
         let priority = TodoPriority(rawValue: seed.priority) ?? .medium
         let completedAt: Date? = seed.completed ? updated : nil
+        let ph = SyncPlaceholder.draftHLC
 
         return TodoItem(
             id: UUID(),
@@ -81,7 +102,11 @@ enum SeedImporter {
             createdOn: created,
             updatedAt: updated,
             completedAt: completedAt,
-            sortOrder: 0
+            sortOrder: 0,
+            hlc: ph,
+            deletedAt: nil,
+            fieldClocks: .empty,
+            version: VersionVector()
         )
     }
 
