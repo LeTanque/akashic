@@ -120,6 +120,15 @@ public enum AkashicPlaintextMigration {
             try SQLiteDiskBundle.requireTruncatingWalCheckpointIfWAL(db)
         }
         try encQueue2.close()
+
+        try SetupMigrationJournal.save(
+            SetupMigrationJournalPayload(
+                version: SetupMigrationJournalPayload.currentVersion,
+                stage: .exported,
+                tempEncryptedFileName: encryptedDestinationURL.lastPathComponent,
+                plaintextBackupFileName: nil
+            )
+        )
     }
 
     /// Backs up plaintext, replaces live DB with encrypted file atomically. Plaintext becomes `akashic.sqlite.plaintext-backup-<timestamp>`.
@@ -141,7 +150,36 @@ public enum AkashicPlaintextMigration {
 
         // Ensure committed WAL data is in the main file before we move the bundle off-disk.
         try SQLiteDiskBundle.checkpointWALAndClosePlainDatabase(at: livePlaintextURL)
+
+        guard let journal = try SetupMigrationJournal.load() else {
+            throw AkashicMigrationError.missingMigrationJournal
+        }
+        guard journal.stage == .exported, journal.tempEncryptedFileName == encryptedTempURL.lastPathComponent else {
+            throw AkashicMigrationError.missingMigrationJournal
+        }
+
         try SQLiteDiskBundle.moveBundle(from: livePlaintextURL, to: backupURL)
+
+        var journalSwapped = SetupMigrationJournalPayload(
+            version: SetupMigrationJournalPayload.currentVersion,
+            stage: .swapped,
+            tempEncryptedFileName: encryptedTempURL.lastPathComponent,
+            plaintextBackupFileName: backupURL.lastPathComponent
+        )
+        do {
+            try SetupMigrationJournal.save(journalSwapped)
+        } catch {
+            do {
+                try SQLiteDiskBundle.moveBundle(from: backupURL, to: livePlaintextURL)
+            } catch let restoreError {
+                throw AkashicMigrationError.swapAndRestoreFailed(
+                    backupPath: backupURL.path,
+                    swapDetail: String(describing: error),
+                    restoreDetail: restoreError.localizedDescription
+                )
+            }
+            throw error
+        }
 
         do {
             try SQLiteDiskBundle.moveBundle(from: encryptedTempURL, to: livePlaintextURL)
@@ -155,8 +193,18 @@ public enum AkashicPlaintextMigration {
                     restoreDetail: restoreError.localizedDescription
                 )
             }
+            try SetupMigrationJournal.save(
+                SetupMigrationJournalPayload(
+                    version: SetupMigrationJournalPayload.currentVersion,
+                    stage: .exported,
+                    tempEncryptedFileName: encryptedTempURL.lastPathComponent,
+                    plaintextBackupFileName: nil
+                )
+            )
             throw error
         }
+
+        try SetupMigrationJournal.clear()
         return backupURL
     }
 }
@@ -164,5 +212,6 @@ public enum AkashicPlaintextMigration {
 public enum AkashicMigrationError: Error, Equatable, Sendable {
     case rowCountMismatch(expected: AkashicPlaintextMigration.TableCounts, actual: AkashicPlaintextMigration.TableCounts)
     case missingTempEncrypted
+    case missingMigrationJournal
     case swapAndRestoreFailed(backupPath: String, swapDetail: String, restoreDetail: String)
 }

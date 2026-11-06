@@ -111,6 +111,19 @@ final class AkashicVaultController: ObservableObject {
             return
         }
         do {
+            if let hazard = try SetupMigrationHazardDetector.blockingReasonIfPresent(), !hazard.isEmpty {
+                setupRequiresManualRecoveryReason = hazard
+                setupError = hazard
+                Self.persistManualRecoveryFlag(hazard)
+                presentation = .firstRun
+                return
+            }
+        } catch {
+            setupError = error.localizedDescription
+            presentation = .unlock
+            return
+        }
+        do {
             let dbURL = try AkashicPaths.databaseURL()
             if let metadata = try LocalSecurityMetadataStore.load() {
                 unlockUsername = metadata.username
@@ -310,6 +323,7 @@ final class AkashicVaultController: ObservableObject {
                     backupDirectory: folder
                 )
             } catch {
+                try? SetupMigrationJournal.clear()
                 do {
                     try SQLiteDiskBundle.removeAllIfPresent(main: tmp)
                 } catch let cleanupError {
@@ -405,6 +419,7 @@ final class AkashicVaultController: ObservableObject {
         }
 
         try? SetupManualRecoveryStore.clear()
+        try? SetupMigrationJournal.clear()
         setupRequiresManualRecoveryReason = nil
 
         pendingMetadata = nil
@@ -460,6 +475,9 @@ final class AkashicVaultController: ObservableObject {
         if let mig = error as? AkashicMigrationError, case let .swapAndRestoreFailed(backupPath, swapDetail, restoreDetail) = mig {
             return "Could not finish encrypting your database (swap failed). Plaintext backup may be at: \(backupPath). Swap: \(swapDetail). Restore attempt: \(restoreDetail)"
         }
+        if let mig = error as? AkashicMigrationError, case .missingMigrationJournal = mig {
+            return "Could not encrypt or replace your existing database: migration journal missing or inconsistent. Do not retry until files are reconciled."
+        }
         return "Could not encrypt or replace your existing database: \(error.localizedDescription)"
     }
 
@@ -472,8 +490,13 @@ final class AkashicVaultController: ObservableObject {
                 return false
             }
         }
-        if let m = error as? AkashicMigrationError, case .swapAndRestoreFailed = m {
-            return true
+        if let m = error as? AkashicMigrationError {
+            switch m {
+            case .swapAndRestoreFailed, .missingMigrationJournal:
+                return true
+            case .rowCountMismatch, .missingTempEncrypted:
+                return false
+            }
         }
         return false
     }
@@ -532,7 +555,7 @@ final class AkashicVaultController: ObservableObject {
         do {
             try SetupManualRecoveryStore.saveReason(message)
         } catch {
-            // In-memory latch still blocks this session; relaunch cannot see the flag without disk write.
+            try? SetupManualRecoveryUserDefaultsStore.saveReason(message)
         }
     }
 

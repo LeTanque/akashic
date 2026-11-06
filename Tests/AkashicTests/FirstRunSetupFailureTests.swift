@@ -1,6 +1,7 @@
 import AkashicCore
 import Foundation
 import GRDB
+import SQLite3
 import XCTest
 @testable import Akashic
 
@@ -44,6 +45,17 @@ final class FirstRunSetupFailureTests: XCTestCase {
         TodoDatabaseTestingHooks.openEncryptedFailure = nil
         TodoDatabaseTestingHooks.openEncryptedFailOnce = nil
         SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
+        SQLiteDiskBundleTestingHooks.unwindFailure = nil
+        SetupMigrationJournalTestingHooks.saveFailure = nil
+        SetupMigrationJournalTestingHooks.saveInvocationCount = 0
+        SetupMigrationJournalTestingHooks.failOnSaveInvocation = nil
+        SetupManualRecoveryStoreTestingHooks.primarySaveFailure = nil
+        try? SetupManualRecoveryUserDefaultsStore.clear()
+    }
+
+    private func startVaultForFirstRun(_ vault: AkashicVaultController) async {
+        vault.start()
+        await waitUntil { vault.presentation == .firstRun }
     }
 
     private func makeVault() -> AkashicVaultController {
@@ -74,8 +86,12 @@ final class FirstRunSetupFailureTests: XCTestCase {
         return URL(fileURLWithPath: u.path + "-wal", isDirectory: false)
     }
 
-    /// Plain DB with WAL journal (real sidecar files on disk).
-    private func installWALPlaintextDatabaseFixture(withPendingInsert: Bool) throws -> Int {
+    /// Plain DB with WAL journal (real `-wal` sidecar on disk after at least one write).
+    private func installWALPlaintextDatabaseFixture(
+        withPendingInsert: Bool,
+        title: String = "wal row",
+        description: String = "pending WAL"
+    ) throws -> Int {
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
 
@@ -91,7 +107,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
         if withPendingInsert {
             try queue.write { db in
                 let ctx = try InstallationContext.loadOrCreate(in: db)
-                let todo = ctx.freshTodo(title: "wal row", description: "pending WAL", priority: .medium)
+                let todo = ctx.freshTodo(title: title, description: description, priority: .medium)
                 try todo.insert(db)
             }
             count = 1
@@ -102,12 +118,58 @@ final class FirstRunSetupFailureTests: XCTestCase {
         return count
     }
 
+    /// Plain DB using DELETE journal mode (no `-wal`); still validates full-row preservation on migration failure.
+    private func installDeleteJournalPlaintextFixture(title: String, description: String) throws {
+        let url = try dbURL()
+        try SQLiteDiskBundle.removeAllIfPresent(main: url)
+
+        let queue = try DatabaseQueue(path: url.path)
+        try queue.write { db in
+            try db.execute(sql: "PRAGMA journal_mode = DELETE")
+        }
+        try TodoDatabase.migrator.migrate(queue)
+        try queue.write { db in
+            let ctx = try InstallationContext.loadOrCreate(in: db)
+            let todo = ctx.freshTodo(title: title, description: description, priority: .medium)
+            try todo.insert(db)
+        }
+        try queue.close()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try walURL().path))
+        XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: url))
+    }
+
     private func countPlainTodos() throws -> Int {
         let url = try dbURL()
         let q = try TodoDatabase.openPlain(at: url)
         defer { try? q.close() }
         return try q.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM todos WHERE deleted_at IS NULL") ?? 0
+        }
+    }
+
+    private func plainActiveTodoTitles() throws -> [String] {
+        let url = try dbURL()
+        let q = try TodoDatabase.openPlain(at: url)
+        defer { try? q.close() }
+        return try q.read { db in
+            try String.fetchAll(db, sql: "SELECT title FROM todos WHERE deleted_at IS NULL ORDER BY title")
+        }
+    }
+
+    private func firstPlainActiveTodoTitleAndDescription() throws -> (String, String) {
+        let url = try dbURL()
+        let q = try TodoDatabase.openPlain(at: url)
+        defer { try? q.close() }
+        return try q.read { db in
+            let row = try Row.fetchOne(
+                db,
+                sql: "SELECT title, description FROM todos WHERE deleted_at IS NULL ORDER BY title LIMIT 1"
+            )
+            guard let row else {
+                struct MissingRow: Error {}
+                throw MissingRow()
+            }
+            return (row["title"], row["description"])
         }
     }
 
@@ -162,14 +224,25 @@ final class FirstRunSetupFailureTests: XCTestCase {
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
 
-        let primary = try DatabaseQueue(path: url.path)
-        try primary.write { db in
-            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        var primary: OpaquePointer?
+        XCTAssertEqual(sqlite3_open_v2(url.path, &primary, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil), SQLITE_OK)
+        guard let dbPrimary = primary else {
+            XCTFail("sqlite3_open failed")
+            return
         }
+        defer {
+            sqlite3_close(dbPrimary)
+        }
+
+        try sqlite3Exec(dbPrimary, "PRAGMA journal_mode = WAL")
+        try sqlite3Exec(dbPrimary, "CREATE TABLE IF NOT EXISTS busy_probe (id INTEGER PRIMARY KEY)")
+        try sqlite3Exec(dbPrimary, "INSERT INTO busy_probe (id) VALUES (1)")
+        try sqlite3Exec(dbPrimary, "BEGIN IMMEDIATE")
 
         let checkpointDone = expectation(description: "checkpoint")
         var checkpointError: Error?
         DispatchQueue.global(qos: .userInitiated).async {
+            defer { checkpointDone.fulfill() }
             do {
                 let other = try DatabaseQueue(path: url.path)
                 try other.write { db in
@@ -179,17 +252,22 @@ final class FirstRunSetupFailureTests: XCTestCase {
             } catch {
                 checkpointError = error
             }
-            checkpointDone.fulfill()
         }
 
-        try primary.write { db in
-            try db.execute(sql: "BEGIN IMMEDIATE")
-            wait(for: [checkpointDone], timeout: 5)
-            try db.execute(sql: "ROLLBACK")
-        }
-        try primary.close()
+        wait(for: [checkpointDone], timeout: 5)
+        try sqlite3Exec(dbPrimary, "ROLLBACK")
 
         XCTAssertEqual(checkpointError as? AkashicSQLiteBundleError, .walCheckpointBusy)
+    }
+
+    private func sqlite3Exec(_ db: OpaquePointer?, _ sql: String) throws {
+        var errMsg: UnsafeMutablePointer<Int8>?
+        let rc = sqlite3_exec(db, sql, nil, nil, &errMsg)
+        guard rc == SQLITE_OK else {
+            let message = errMsg.map { String(cString: $0) } ?? "sqlite3_exec failed (\(rc))"
+            sqlite3_free(errMsg)
+            throw NSError(domain: "SQLite3Test", code: Int(rc), userInfo: [NSLocalizedDescriptionKey: message])
+        }
     }
 
     /// DELETE journal: `wal_checkpoint` returns `(0,-1,-1)` — must not be treated as incomplete.
@@ -210,12 +288,13 @@ final class FirstRunSetupFailureTests: XCTestCase {
 
     func testWrongTOTPKeepsIncompleteAndAPILocked() async throws {
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
         let otpauth = vault.setupOtpauthURI
         let recovery = vault.setupRecoveryDisplay
 
         vault.setupTOTPCode = "000000"
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil { vault.setupError != nil }
 
         XCTAssertEqual(vault.presentation, .firstRun)
@@ -227,10 +306,21 @@ final class FirstRunSetupFailureTests: XCTestCase {
     }
 
     func testMigrationExportFailurePreservesWALRowsAndKeepsSecrets() async throws {
-        _ = try installWALPlaintextDatabaseFixture(withPendingInsert: true)
+        let uniqueTitle = "wal row \(UUID().uuidString.prefix(8))"
+        let uniqueBody = "pending WAL body \(UUID().uuidString.prefix(8))"
+        _ = try installWALPlaintextDatabaseFixture(
+            withPendingInsert: true,
+            title: uniqueTitle,
+            description: uniqueBody
+        )
         XCTAssertEqual(try countPlainTodos(), 1)
+        let (savedTitle, savedBody) = try firstPlainActiveTodoTitleAndDescription()
+        XCTAssertEqual(savedTitle, uniqueTitle)
+        XCTAssertEqual(savedBody, uniqueBody)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try walURL().path))
 
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
         let good = try vault.testingCurrentSetupTOTPCode()
         let otpauth = vault.setupOtpauthURI
@@ -239,7 +329,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
             domain: "TestMigration", code: 1, userInfo: [NSLocalizedDescriptionKey: "simulated export"]
         )
         vault.setupTOTPCode = good
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil(timeout: 25) { vault.setupError != nil }
 
         XCTAssertEqual(vault.presentation, .firstRun)
@@ -249,15 +339,23 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertTrue(vault.testingIsAPILocked)
 
         XCTAssertEqual(try countPlainTodos(), 1)
+        let (afterTitle, afterBody) = try firstPlainActiveTodoTitleAndDescription()
+        XCTAssertEqual(afterTitle, uniqueTitle)
+        XCTAssertEqual(afterBody, uniqueBody)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try walURL().path))
         XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: try dbURL()))
         XCTAssertFalse(FileManager.default.fileExists(atPath: try securityURL().path))
     }
 
     func testOpenFailOnceAfterMigrationRollsBackThenSucceeds() async throws {
-        try installPlaintextDatabaseFixture()
-        XCTAssertEqual(try countPlainTodos(), 0)
+        let uniqueTitle = "delete journal row \(UUID().uuidString.prefix(8))"
+        try installPlaintextDatabaseFixture(seedTodoTitle: uniqueTitle)
+        XCTAssertEqual(try countPlainTodos(), 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try walURL().path))
+        XCTAssertEqual(try plainActiveTodoTitles(), [uniqueTitle])
 
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
         let good = try vault.testingCurrentSetupTOTPCode()
 
@@ -265,16 +363,17 @@ final class FirstRunSetupFailureTests: XCTestCase {
             domain: "TestOpenOnce", code: 9, userInfo: [NSLocalizedDescriptionKey: "fail once"]
         )
         vault.setupTOTPCode = good
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil(timeout: 45) { vault.setupError != nil }
 
         XCTAssertEqual(vault.presentation, .firstRun)
         XCTAssertTrue(vault.setupError?.contains("Could not open the encrypted database") == true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: try securityURL().path))
         XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: try dbURL()))
-        XCTAssertEqual(try countPlainTodos(), 0)
+        XCTAssertEqual(try countPlainTodos(), 1)
+        XCTAssertEqual(try plainActiveTodoTitles(), [uniqueTitle])
 
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil(timeout: 45) { vault.presentation == .ready }
 
         XCTAssertNil(vault.setupError)
@@ -283,10 +382,13 @@ final class FirstRunSetupFailureTests: XCTestCase {
     }
 
     func testMetadataSaveFailureAfterMigrationRestoresPlaintext() async throws {
-        try installPlaintextDatabaseFixture()
-        XCTAssertEqual(try countPlainTodos(), 0)
+        let uniqueTitle = "metadata rollback \(UUID().uuidString.prefix(8))"
+        try installPlaintextDatabaseFixture(seedTodoTitle: uniqueTitle)
+        XCTAssertEqual(try countPlainTodos(), 1)
+        XCTAssertEqual(try plainActiveTodoTitles(), [uniqueTitle])
 
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
         let good = try vault.testingCurrentSetupTOTPCode()
 
@@ -294,17 +396,18 @@ final class FirstRunSetupFailureTests: XCTestCase {
             domain: "TestMeta", code: 2, userInfo: [NSLocalizedDescriptionKey: "simulated save"]
         )
         vault.setupTOTPCode = good
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil(timeout: 45) { vault.setupError != nil }
 
         XCTAssertEqual(vault.presentation, .firstRun)
         XCTAssertTrue(vault.setupError?.contains("akashic-security.json") == true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: try securityURL().path))
         XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: try dbURL()))
-        XCTAssertEqual(try countPlainTodos(), 0)
+        XCTAssertEqual(try countPlainTodos(), 1)
+        XCTAssertEqual(try plainActiveTodoTitles(), [uniqueTitle])
 
         LocalSecurityMetadataStoreTestingHooks.saveFailure = nil
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil(timeout: 45) { vault.presentation == .ready }
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: try securityURL().path))
@@ -312,6 +415,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
 
     func testDuplicateFinishIgnoredWhileSavingMetadata() async throws {
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
         let good = try vault.testingCurrentSetupTOTPCode()
 
@@ -319,9 +423,10 @@ final class FirstRunSetupFailureTests: XCTestCase {
         let startCount = LocalSecurityMetadataStoreTestingHooks.saveEntryCount
 
         vault.setupTOTPCode = good
-        Task { await vault.completeFirstRunAfterTOTP() }
+        async let first: Void = vault.completeFirstRunAfterTOTP()
         try await Task.sleep(nanoseconds: 50_000_000)
         await vault.completeFirstRunAfterTOTP()
+        await first
 
         await waitUntil(timeout: 30) { vault.presentation == .ready }
 
@@ -341,22 +446,24 @@ final class FirstRunSetupFailureTests: XCTestCase {
         _ = try installWALPlaintextDatabaseFixture(withPendingInsert: false)
 
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
 
         TodoDatabaseTestingHooks.openEncryptedFailOnce = NSError(
             domain: "TestOpenOnce", code: 9, userInfo: [NSLocalizedDescriptionKey: "fail once"]
         )
-        // Fail mid-bundle restore after plaintext backup includes `-wal` (first move = main, second = wal).
-        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = 2
+        SQLiteDiskBundleTestingHooks.unwindFailure = NSError(
+            domain: "TestUnwind", code: 3, userInfo: [NSLocalizedDescriptionKey: "simulated unwind failure"]
+        )
         vault.setupTOTPCode = try vault.testingCurrentSetupTOTPCode()
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil(timeout: 45) { vault.setupRequiresManualRecoveryReason != nil }
 
         XCTAssertEqual(vault.presentation, .firstRun)
         XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
         XCTAssertTrue(vault.setupError?.contains("could not roll back safely") == true)
         XCTAssertTrue(vault.testingIsAPILocked)
-        SQLiteDiskBundleTestingHooks.moveBundleFailAfterNSuccessfulMoves = nil
+        SQLiteDiskBundleTestingHooks.unwindFailure = nil
 
         vault.advanceFirstRunToCodes()
         XCTAssertNotNil(vault.setupRequiresManualRecoveryReason)
@@ -372,14 +479,15 @@ final class FirstRunSetupFailureTests: XCTestCase {
         vault.testingArmManualRecoveryForTests("test disk hazard")
 
         let vault2 = makeVault()
-        vault2.testingRefreshManualRecoveryFromDisk()
-
+        vault2.start()
+        await waitUntil { vault2.presentation == .firstRun }
         XCTAssertEqual(vault2.setupRequiresManualRecoveryReason, "test disk hazard")
         XCTAssertEqual(vault2.setupError, "test disk hazard")
     }
 
     func testCreateEmptyDBFailureDoesNotWriteArtifacts() async throws {
         let vault = makeVault()
+        await startVaultForFirstRun(vault)
         try seedPendingSetup(vault: vault)
         let good = try vault.testingCurrentSetupTOTPCode()
 
@@ -387,7 +495,7 @@ final class FirstRunSetupFailureTests: XCTestCase {
             domain: "TestCreate", code: 4, userInfo: [NSLocalizedDescriptionKey: "simulated create"]
         )
         vault.setupTOTPCode = good
-        Task { await vault.completeFirstRunAfterTOTP() }
+        await vault.completeFirstRunAfterTOTP()
         await waitUntil { vault.setupError != nil }
 
         XCTAssertTrue(vault.setupError?.contains("Could not create the encrypted database") == true)
@@ -395,13 +503,94 @@ final class FirstRunSetupFailureTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: try securityURL().path))
     }
 
+    func testMigrationJournalFirstSaveFailureRollsBackTempEncryptedFile() async throws {
+        try installPlaintextDatabaseFixture(seedTodoTitle: "journal fail")
+        SetupMigrationJournalTestingHooks.failOnSaveInvocation = 1
+        SetupMigrationJournalTestingHooks.saveFailure = NSError(
+            domain: "TestJournal", code: 7, userInfo: [NSLocalizedDescriptionKey: "simulated journal write"]
+        )
+
+        let vault = makeVault()
+        await startVaultForFirstRun(vault)
+        try seedPendingSetup(vault: vault)
+        vault.setupTOTPCode = try vault.testingCurrentSetupTOTPCode()
+        await vault.completeFirstRunAfterTOTP()
+        await waitUntil { vault.setupError != nil }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try SetupMigrationJournal.fileURL().path))
+        XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: try dbURL()))
+    }
+
+    func testMigrationExportFailurePreservesDeleteJournalRowContent() async throws {
+        let uniqueTitle = "delete fixture \(UUID().uuidString.prefix(8))"
+        let uniqueBody = "delete body \(UUID().uuidString.prefix(8))"
+        try installDeleteJournalPlaintextFixture(title: uniqueTitle, description: uniqueBody)
+        XCTAssertEqual(try countPlainTodos(), 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try walURL().path))
+
+        let vault = makeVault()
+        await startVaultForFirstRun(vault)
+        try seedPendingSetup(vault: vault)
+        AkashicPlaintextMigrationTestingHooks.exportPlaintextFailure = NSError(
+            domain: "TestMigration", code: 1, userInfo: [NSLocalizedDescriptionKey: "simulated export"]
+        )
+        vault.setupTOTPCode = try vault.testingCurrentSetupTOTPCode()
+        await vault.completeFirstRunAfterTOTP()
+        await waitUntil { vault.setupError != nil }
+
+        XCTAssertEqual(try countPlainTodos(), 1)
+        let (t, d) = try firstPlainActiveTodoTitleAndDescription()
+        XCTAssertEqual(t, uniqueTitle)
+        XCTAssertEqual(d, uniqueBody)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try walURL().path))
+    }
+
+    func testManualRecoveryMarkerFallsBackToUserDefaultsWhenDiskFails() async throws {
+        SetupManualRecoveryStoreTestingHooks.primarySaveFailure = NSError(
+            domain: "TestDiskFull", code: 28, userInfo: [NSLocalizedDescriptionKey: "simulated disk full"]
+        )
+        let vault = makeVault()
+        XCTAssertNil(try SetupManualRecoveryStore.loadReason())
+
+        vault.testingArmManualRecoveryForTests("marker via user defaults")
+
+        let vault2 = makeVault()
+        vault2.start()
+        await waitUntil { vault2.presentation == .firstRun && vault2.setupRequiresManualRecoveryReason != nil }
+        XCTAssertEqual(vault2.setupRequiresManualRecoveryReason, "marker via user defaults")
+    }
+
+    func testOrphanPlaintextBackupWithoutLiveDbBlocksEmptyVault() async throws {
+        let folder = try AkashicPaths.applicationSupportFolder()
+        let backup = folder.appendingPathComponent("akashic.sqlite.plaintext-backup-test.sqlite")
+        let magic = "SQLite format 3\u{0}".data(using: .ascii)!
+        try magic.write(to: backup)
+
+        let vault = makeVault()
+        vault.start()
+        await waitUntil { vault.presentation == .firstRun && vault.setupRequiresManualRecoveryReason != nil }
+        XCTAssertTrue(vault.setupRequiresManualRecoveryReason?.contains("plaintext backup exists") == true)
+    }
+
     // MARK: - Helpers (non-WAL)
 
     /// Seed `akashic.sqlite` with a plain (non-SQLCipher) database file.
-    private func installPlaintextDatabaseFixture() throws {
+    private func installPlaintextDatabaseFixture(seedTodoTitle: String? = nil) throws {
         let url = try dbURL()
         try SQLiteDiskBundle.removeAllIfPresent(main: url)
-        _ = try TodoDatabase.openPlain(at: url)
+        let q = try TodoDatabase.openPlain(at: url)
+        if let seedTodoTitle {
+            try q.write { db in
+                let ctx = try InstallationContext.loadOrCreate(in: db)
+                let todo = ctx.freshTodo(
+                    title: seedTodoTitle,
+                    description: "fixture description body",
+                    priority: .medium
+                )
+                try todo.insert(db)
+            }
+        }
+        try q.close()
         XCTAssertTrue(try AkashicPlaintextMigration.fileLooksLikePlaintextSQLite(at: url))
     }
 }

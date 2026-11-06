@@ -5,6 +5,8 @@ import GRDB
 public enum SQLiteDiskBundleTestingHooks {
     /// When non-nil, `moveBundle` throws after exactly this many successful `moveItem` calls (1 = fail after main).
     public nonisolated(unsafe) static var moveBundleFailAfterNSuccessfulMoves: Int? = nil
+    /// When set, `unwindPartialBundleMoves` throws (simulates irrecoverable partial move).
+    public nonisolated(unsafe) static var unwindFailure: Error?
 }
 
 /// Paths for a single SQLite database path `*.sqlite`: sidecars are **`path-wal`**, **`path-shm`**, **`path-journal`** (not path-extension swaps).
@@ -95,6 +97,9 @@ public enum SQLiteDiskBundle {
     }
 
     private static func unwindPartialBundleMoves(_ completedMoves: [(src: URL, dst: URL)]) throws {
+        if let err = SQLiteDiskBundleTestingHooks.unwindFailure {
+            throw err
+        }
         let fm = FileManager.default
         for pair in completedMoves.reversed() {
             guard fm.fileExists(atPath: pair.dst.path) else { continue }
